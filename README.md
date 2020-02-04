@@ -1,6 +1,19 @@
-# Typescript Stuff
+# Demonstration of "Quick Start" for SPK
 
+## Problem
 
+* Setting up SPK takes too much
+* When someone visits a GitHub project page they will want to get up and going extremely fast
+* Currently we have many entry points and don't do enough to guide users down a pat
+* I want users to _get_ GitOps in less than 5 minutes.
+
+## What to accomplish in this prototype
+
+* Develop a way to help users quickly and interactively build up their configuration  
+* Supercharge our scaffolding by doing what we do in the integration tests
+
+------
+## TypeScript Links
 
 Install Typescript globally
 `npm install -g typescript`
@@ -8,7 +21,6 @@ Install Typescript globally
 Install webpack
 `npm install --save-dev webpack webpack-cli`
 yarn add webpack webpack-cli --dev
-
 
 > Both of these dependencies will let TypeScript and webpack play well together. ts-loader helps Webpack compile your TypeScript code using the TypeScript’s standard configuration file named tsconfig.json. source-map-loader uses any sourcemap outputs from TypeScript to inform webpack when generating its own sourcemaps. This will allow you to debug your final output file as if you were debugging your original TypeScript source code.
 
@@ -22,7 +34,6 @@ Initialize a package.json interactively
 
 Add dependencies
 `yarn add chalk figlet inquirer shelljs ts-node clear`
-
 `yarn add ts-node`
 
 ## Great Links
