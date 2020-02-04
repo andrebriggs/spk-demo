@@ -12,6 +12,10 @@
 * Develop a way to help users quickly and interactively build up their configuration  
 * Supercharge our scaffolding by doing what we do in the integration tests
 
+## Current Requirements
+
+Current this prototype assuming the repo for this project is a sibling to a the `spk` repo. The sibling `spk` must be named `spk`.  
+
 ------
 ## TypeScript Links
 
