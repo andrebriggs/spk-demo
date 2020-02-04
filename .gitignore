@@ -99,3 +99,6 @@ typings/
 
 # Local XUnit test results
 junit.xml
+
+
+test-env/
