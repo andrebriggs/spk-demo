@@ -328,6 +328,12 @@ async function scaffoldHLDRepo(){
     // console.log = function() {}
 
     init()
+    const answer = await askOrganization();
+    console.log("Org Name:\t"+answer.azdo_org_name);
+    console.log("Project Name:\t"+answer.azdo_project_name);
+    console.log("https://dev.azure.com/"+answer.azdo_org_name+"/"+answer.azdo_project_name)    
+    //TODO: link the inputs
+
     logger.info(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`)
     if(fs.existsSync(WORKSPACE_DIR)){
         rimraf.sync(WORKSPACE_DIR);
@@ -342,7 +348,7 @@ async function scaffoldHLDRepo(){
     // logCurrentDirectory()
     
     // const answer = await askIfJsorTs()
-    // const answer = askOrganization()
+
     // answer.then(answers => {
     //     console.log("Org Name:\t"+answers.azdo_org_name);
     //     console.log("Project Name:\t"+answers.azdo_project_name);
