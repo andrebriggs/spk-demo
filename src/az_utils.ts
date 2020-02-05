@@ -1,6 +1,7 @@
 import * as vsoNodeApi from "azure-devops-node-api";
 import { GitRepository } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 import { logger } from "../../spk/src/logger";
+import { BuildDefinitionReference } from "azure-devops-node-api/interfaces/BuildInterfaces";
 
 export const getApi = async (
   serverUrl: string,
@@ -69,5 +70,41 @@ export const deleteRepoInAzureOrg = async (
     throw new Error(
       'Repository Id is undefined, cannot delete repository'
     );
+  }
+};
+
+export const getPipeline = async (
+  azureOrgUrl: string,
+  accessToken: string,
+  projectName: string,
+  pipelineName: string
+): Promise<BuildDefinitionReference | undefined> => {
+  try {
+    logger.info(`Finding pipeline ${pipelineName}`);
+    const vstsCollectionLevel = await getWebApi(azureOrgUrl, accessToken);
+    const buildApi = await vstsCollectionLevel.getBuildApi();
+    const defs = await buildApi.getDefinitions(projectName);
+    return defs.find(d => d.name === pipelineName);
+  } catch (e) {
+    logger.error(e);
+    return undefined;
+  }
+};
+
+export const deletePipeline = async (
+  azureOrgUrl: string,
+  accessToken: string,
+  projectName: string,
+  pipelineName: string,
+  id: number
+) => {
+  try {
+    logger.info(`Deleting pipeline ${pipelineName}`);
+    const vstsCollectionLevel = await getWebApi(azureOrgUrl, accessToken);
+    const buildApi = await vstsCollectionLevel.getBuildApi();
+    await buildApi.deleteDefinition(projectName, id);
+  } catch (e) {
+    logger.error(`Error in deleting pipeline ${pipelineName}`);
+    throw e;
   }
 };
