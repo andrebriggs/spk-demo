@@ -1,12 +1,13 @@
 {
   "defaultSeverity": "error",
-  "extends": ["tslint:recommended"],
+  "extends": ["tslint:recommended", "tslint-config-prettier"],
   "jsRules": {},
   "rules": {
     "no-trailing-whitespace": true,
     "semicolon": true,
     "no-for-in": true,
     "curly": true,
+    "no-console": false,
     "no-var-keyword": true,
     "strict-comparisons": true,
     "max-file-line-count": [true, 500],
