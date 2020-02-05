@@ -16,6 +16,9 @@
 
 Current this prototype assuming the repo for this project is a sibling to a the `spk` repo. The sibling `spk` must be named `spk`.  
 
+## Current Ability
+* There is a prototype of creating Manifest and HLD repos.
+
 ------
 ## TypeScript Links
 
