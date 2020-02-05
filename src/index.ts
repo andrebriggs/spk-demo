@@ -1,10 +1,12 @@
 import clear from "clear"
+import * as constants from "./constant_values";
+import rimraf from "rimraf";
 import figlet from "figlet"
 import chalk from "chalk"
 import cli  from "clui"
 import inquirer from 'inquirer'
 import { exec } from "../../spk/src/lib/shell";
-import { logger } from "../../spk/src/logger";
+// import { logger } from "../../spk/src/logger";
 import { execute as hldExecute, initialize as hldInitialize} from "../../spk/src/commands/hld/init";
 import fs from "fs-extra";
 import path from "path";
@@ -12,14 +14,13 @@ import simplegit from "simple-git/promise"
 import { IGitApi } from "azure-devops-node-api/GitApi";
 let gitApi: IGitApi | undefined;
 
-
 const Spinner = cli.Spinner
 const spawn = require('child_process').spawn
 
 const init = async () => {
     clear()
     console.log(
-        chalk.blue("Welcome to the world of SPK")
+        chalk.blueBright("Welcome SPK Quick Start!")
         )   
 }
 
@@ -74,7 +75,7 @@ const askOrganization = () => {
         {
             name: 'azdo_org_name',
             type: 'input',
-            message: 'Enter {organization name}\n',// of Azure DevOps? (i.e. https://dev.azure.com/{organizationName})',
+            message: 'Enter {organization name}\n',
             validate: function(value: string) {
                 var pass = value.match(
                     /^\S*$/ //No Spaces
@@ -89,7 +90,7 @@ const askOrganization = () => {
         {
             name: 'azdo_project_name',
             type: 'input',
-            message: 'Enter {project name}\n'// in Azure DevOps organization? (i.e. https://dev.azure.com/orgName/{projectName})',
+            message: 'Enter {project name}\n'
             // validate: function(value: string) {
             //     var pass = value.match(
             //         /[^A-Za-z0-9-]+/ //See https://www.regextester.com
@@ -126,84 +127,101 @@ export const pushBranch = async (branchName: string): Promise<void> => {
     }
   };
 
-const ACCESS_TOKEN="rmsajzlsff3x34e64dmc63c2agrrvdzq3hcwpi7j5do3q7j3o3ca"
-const AZDO_ORG="abrig"
-const AZDO_PROJECT="spk"
-const MANIFEST_REPO="manifest-repo";
-const HLD_REPO="hld-repo";
-const APP_REPO="fabrikam-app-repo";
-let dirList: string[] = [MANIFEST_REPO, HLD_REPO, APP_REPO];
+
+
 let manifestRepoFiles: string[] = ["README.md"];
 // let hldRepoFiles: string[] = ["README.md"];
 // let appRepoFiles: string[] = ["README.md"];
 const git = simplegit();
+
+
+function logCurrentDirectory() {
+    console.log('Current directory: ' + process.cwd());
+}
+
+const createDirectory = (dirName: string) => {
+    fs.mkdirpSync(dirName)
+};
+
+const getFullPath = (relativeItem: string): string => {
+    return path.join(process.cwd(), relativeItem);
+};
+
+const moveToRelativePath = (relativePath: string) => {
+    process.chdir(relativePath);
+};
+
+const moveToPath = (relativePath: string) => {
+    process.chdir(path.join(process.cwd(),relativePath));
+};
+
 (async () => {
-
-    // try{
-    //     // Delete dirs. 
-    //     fs.rmdir(MANIFEST_REPO,()=>{})
-    //     fs.rmdir(HLD_REPO,()=>{})
-    //     fs.rmdir(APP_REPO,()=>{})
-    // }
-    // catch(err){
-    //     console.error(`Error deleting dirs!\n${err}`)
-    // }
-
     init()
-    if(fs.existsSync("test-env")){
-        fs.removeSync("test-env")
+    if(fs.existsSync(constants.WORKSPACE)){
+        rimraf(constants.WORKSPACE, function () { console.log(`Deleted ${constants.WORKSPACE}!`); });
     }
+    // var currentPath = getFullPath(constants.WORKSPACE)
+    createDirectory(constants.WORKSPACE)
+    moveToPath(constants.WORKSPACE)
+        
+    createDirectory(constants.MANIFEST_REPO)
+    moveToRelativePath(constants.MANIFEST_REPO)
 
-    fs.mkdirSync("test-env")
-    process.chdir(path.join("test-env"))
-    console.log('New directory: ' + process.cwd());
+    try{
+        await git.init()
+        console.log("git init called")
+    }
+    catch(err)
+    {
+        console.log(err)
+    }
+    // git.init().then(()=>{
+    //     console.log("git init called")
+    //     logCurrentDirectory()
+    //     fs.createFileSync("README.md");
+    //     fs.readdirSync(process.cwd()).forEach(file => {
+    //         console.log(file);
+    //       });
+    // })
+
+    // createDirectory(constants.HLD_REPO)
+    // createDirectory(constants.APP_REPO)
+
+    // logCurrentDirectory()
     
-    for (let dirName of dirList) {
-        if(fs.existsSync(dirName)){
-            console.log(`Current dir to delete: ${dirName}`)
-            exec("rm", ["-rf",dirName])
-                .then(stdout => console.log(stdout))
-                .catch(stderr => console.error(stderr)); //Hack to recursively force delete
-            // fs.rmdir(dirName).then(()=>{})
-            // .catch(err=>{logger.error(`Error deleting ${dirName}\n${err}`)})
-        }
-    }
     // const answer = await askIfJsorTs()
-    const answer = askOrganization()
-    answer.then(answers => {
-        console.log("Org Name:\t"+answers.azdo_org_name);
-        console.log("Project Name:\t"+answers.azdo_project_name);
-        console.log("https://dev.azure.com/"+answers.azdo_org_name+"/"+answers.azdo_project_name)
-        
-        
-        fs.mkdirSync(MANIFEST_REPO)
-        logger.info(`Wrote dir ${ MANIFEST_REPO }`);
-        process.chdir(path.join(MANIFEST_REPO))
-        console.log('New directory: ' + process.cwd());
-        git.init().then(()=>{
-            console.log("git init called")
-            console.log('Current directory: ' + process.cwd());
-            fs.createFileSync("README.md");
-        })
-        // exec("git", ["init"]).then(stdout => console.log(stdout));
-        
-        
-        git.add("README.md").then(()=>{
-            exec("git", ["status", "."]).then(stdout => console.log(stdout))
-            // const stats = git.status();
-        })
-        
-        exec("ls", ["-ls"]).then(stdout => console.log(stdout))
+    // const answer = askOrganization()
+    // answer.then(answers => {
+    //     console.log("Org Name:\t"+answers.azdo_org_name);
+    //     console.log("Project Name:\t"+answers.azdo_project_name);
+    //     console.log("https://dev.azure.com/"+answers.azdo_org_name+"/"+answers.azdo_project_name)      
+    // });
+   
+    
 
-        
-        // fs.mkdir(HLD_REPO,()=> {logger.info(`Wrote dir ${ HLD_REPO }`)})
-        // exec("git", ["init"]);
-        // logger.info(`Current dir ${process.cwd}`)
-        // hldInitialize(HLD_REPO,false);
-        // exec("git",["add", "-A"])
-        // exec("git",["commit", "-m","'initial commit'"])
-        // gitApi?.getRepositories
-    });
+    // var currentPath = getFullPath(constants.MANIFEST_REPO)
+    // process.chdir(currentPath)
+    // logCurrentDirectory()
+
+
+    // exec("git", ["init"]).then(stdout => console.log(stdout));
+    
+    
+    // git.add("README.md").then(()=>{
+    //     exec("git", ["status", "."]).then(stdout => console.log(stdout))
+    //     // const stats = git.status();
+    // })
+    
+    // exec("ls", ["-ls"]).then(stdout => console.log(stdout))
+
+    
+    // fs.mkdir(HLD_REPO,()=> {logger.info(`Wrote dir ${ HLD_REPO }`)})
+    // exec("git", ["init"]);
+    // logger.info(`Current dir ${process.cwd}`)
+    // hldInitialize(HLD_REPO,false);
+    // exec("git",["add", "-A"])
+    // exec("git",["commit", "-m","'initial commit'"])
+    // gitApi?.getRepositories
 
 
 
@@ -217,3 +235,8 @@ const git = simplegit();
     // await installSpinner('HLD repository')
     // await installSpinner('Application repository')
 })()
+
+
+
+
+
