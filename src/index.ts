@@ -9,10 +9,10 @@ import { exec } from "../../spk/src/lib/shell";
 // import { logger } from "../../spk/src/logger";
 import { execute as hldExecute, initialize as hldInitialize} from "../../spk/src/commands/hld/init";
 import fs from "fs-extra";
-import * as common from "./utils";
+import * as azOps from "./utils";
 
 import path from "path";
-import simplegit from "simple-git/promise"
+import simplegit, { StatusResult, SimpleGit } from "simple-git/promise"
 import { IGitApi } from "azure-devops-node-api/GitApi";
 import { GitObjectType } from "azure-devops-node-api/interfaces/GitInterfaces";
 import * as bi from "azure-devops-node-api/interfaces/BuildInterfaces";
@@ -140,8 +140,6 @@ let manifestRepoFiles: string[] = ["README.md"];
 // let hldRepoFiles: string[] = ["README.md"];
 // let appRepoFiles: string[] = ["README.md"];
 
-
-
 function logCurrentDirectory() {
     console.log('Current directory: ' + process.cwd());
 }
@@ -168,88 +166,79 @@ const moveToAbsPath = (absPath: string) => {
 const homedir = require('os').homedir();
 const WORKSPACE_DIR = path.resolve(path.join(homedir,constants.WORKSPACE));
 
-async function findRepoInAzureOrg(repoName: string) : Promise<GitRepository> {
-    const vstsCollectionLevel: vsoNodeApi.WebApi = await common.getWebApi(); //org url
-    const gitApi = await vstsCollectionLevel.getGitApi();
-    const respositories: GitRepository[] = await gitApi.getRepositories();
-
-    if (respositories) {
-        console.log(`found ${respositories.length} respositories`);
-        var foundRepo = respositories.find(repo => repo.name==repoName);
-        if (foundRepo){       
-            console.log("We found: "+foundRepo.name)
-            return foundRepo;
-        }
-    }
-    else{
-        console.log("Found no repos...")
-    }
-    return {}; //I don't like returning an empty object
-}
-
-async function deleteRepoInAzureOrg(repo: GitRepository, projectName: string) {
-    const vstsCollectionLevel: vsoNodeApi.WebApi = await common.getWebApi(); //org url
-    const gitApi = await vstsCollectionLevel.getGitApi();
-    if(repo.id){
-        await gitApi.deleteRepository(repo.id, projectName)
-        console.log("Deleted repository "+repo.name)
-    }
-    else{
-        throw new Error(
-            'Repository Id is undefined, cannot delete repository'
-          )
-    }
-}
-
-async function createRepoInAzureOrg(repoName: string, projectName: string) : Promise<GitRepository> {
-    const vstsCollectionLevel: vsoNodeApi.WebApi = await common.getWebApi(); //org url
+async function createRepoInAzureOrg(azureOrgUrl: string, accessToken: string,repoName: string, projectName: string) : Promise<GitRepository> {
+    const vstsCollectionLevel: vsoNodeApi.WebApi = await azOps.getWebApi(azureOrgUrl,accessToken); //org url
     const gitApi = await vstsCollectionLevel.getGitApi();
     const createOptions: GitInterfaces.GitRepositoryCreateOptions = <GitInterfaces.GitRepositoryCreateOptions>{name: repoName,project: projectName};
     return await gitApi.createRepository(createOptions,projectName);
 }
 
+const logGitInformation = (gitStatus: StatusResult) =>{
+    console.log("Files in local Git:")
+    for( let fileName of gitStatus.files) {
+        console.log("\t"+fileName.path);
+    };
+
+    console.log("Files added to Git:")
+    for( let fileName of gitStatus.created) {
+        console.log("\t"+fileName);
+    };
+
+    console.log(chalk.yellow("Files not added to Git:"))
+    for( let fileName of gitStatus.not_added) {
+        console.log("\t"+fileName);
+    };
+}
+
+async function commitAndPushToRemote(git: SimpleGit, azureOrgName: string, azureProjectName: string, accessToken: string, repoName: string) {
+       //Commit and check the local git log
+       await git.commit(`Initial commit for ${repoName} repo`)
+
+       var resultLog = await git.log()
+       console.log("Log Messages from Git:")
+       for( let logField of resultLog.all) {
+           console.log("\t"+logField.date +" --> "+logField.message);
+       };
+
+       // We know AzDO url style so hack it for now instead of discovering via API
+       const remoteURL=
+       `dev.azure.com/${azureOrgName}/${azureProjectName}/_git/${repoName}`
+
+       const remote = `https://${constants.USER}:${accessToken}@${remoteURL}`;
+
+       // Push to remote
+       await git.addRemote('origin', remote)
+       await git.push('origin', 'master');
+
+       console.log(`Finished pushing ${repoName} repo!`) 
+}
+
+
 
 (async () => {
-
-        // //Find repo
-        // if (respositories) {
-        //     console.log(`found ${respositories.length} respositories`);
-        //     var foundRepo = respositories.find(repo => repo.name=="manifest_repo");
-        //     if (foundRepo){
-        //         console.log("We found: "+foundRepo.name)
-        //     }
-        //     // for(let repo of respositories){
-        //     //     console.log(repo.name)
-        //     // }
-        // }
-        // else{
-        //     console.log("Found no repos...")
-        // }
-
-
 
     init()
     console.log(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`)
     if(fs.existsSync(WORKSPACE_DIR)){
         rimraf.sync(WORKSPACE_DIR);
     }
-    // var currentPath = getFullPath(constants.WORKSPACE)
+
     createDirectory(WORKSPACE_DIR)
     moveToAbsPath(WORKSPACE_DIR)
         
     createDirectory(constants.MANIFEST_REPO)
     moveToRelativePath(constants.MANIFEST_REPO)
 
-    var gitRepo = await findRepoInAzureOrg(constants.MANIFEST_REPO);
+    var gitRepo = await azOps.findRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,constants.MANIFEST_REPO);
     let resultRepo: GitRepository;
+
     if(gitRepo.id){       
-        console.log("Found remote repo "+constants.MANIFEST_REPO+". Attempting to delete")
-        await deleteRepoInAzureOrg(gitRepo,constants.AZDO_PROJECT);
+        
+        await azOps.deleteRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,gitRepo,constants.AZDO_PROJECT);
     }
-    resultRepo = await createRepoInAzureOrg(constants.MANIFEST_REPO,constants.AZDO_PROJECT)
+    resultRepo = await createRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,constants.MANIFEST_REPO,constants.AZDO_PROJECT)
     console.log("Result repo: "+resultRepo.remoteUrl);
 
-    // resultRepo.remoteUrl
     try{
         logCurrentDirectory()
         const git = simplegit();
@@ -258,49 +247,11 @@ async function createRepoInAzureOrg(repoName: string, projectName: string) : Pro
             console.log(`Git init called in ${process.cwd()}`)
         }
         
+        // Create and add files
         fs.createFileSync("README.md");
-        
-        // Add files
         await git.add("./README.md")
 
-        //Get git status and get various information
-        var statusResult = await git.status()
-        
-        console.log("Files in local Git:")
-        for( let fileName of statusResult.files) {
-            console.log("\t"+fileName.path);
-        };
-
-        console.log("Files added to Git:")
-        for( let fileName of statusResult.created) {
-            console.log("\t"+fileName);
-        };
-
-        console.log(chalk.yellow("Files not added to Git:"))
-        for( let fileName of statusResult.not_added) {
-            console.log("\t"+fileName);
-        };
-        
-        //Commit and check the local git log
-        await git.commit("Initial commit for Manifest repo")
-
-        var resultLog = await git.log()
-        console.log("Log Messages from Git:")
-        for( let logField of resultLog.all) {
-            console.log("\t"+logField.date +" --> "+logField.message);
-        };
-
-        // We know AzDO url style so hack it for now instead of discovering via API
-        const remoteURL=
-        `dev.azure.com/${constants.AZDO_ORG}/${constants.AZDO_PROJECT}/_git/${constants.MANIFEST_REPO}`
-
-        const remote = `https://${constants.USER}:${constants.ACCESS_TOKEN}@${remoteURL}`;
-
-        // Push to remote
-        await git.addRemote('origin', remote)
-        await git.push('origin', 'master');
-
-        console.log("Finished pushing manifest repo!") 
+        commitAndPushToRemote(git,constants.AZDO_ORG,constants.AZDO_PROJECT,constants.ACCESS_TOKEN,constants.MANIFEST_REPO)
     }
     catch(err)
     {

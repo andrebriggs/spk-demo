@@ -1,64 +1,14 @@
-import fs from "fs-extra";
-import { logger } from "../../spk/src/logger";
-import { exec } from "../../spk/src/lib/shell";
 import * as constants from "./constant_values";
 import * as vm from "azure-devops-node-api";
 import * as lim from "azure-devops-node-api/interfaces/LocationsInterfaces";
+import { GitRepository, TfvcChangesetRef } from "azure-devops-node-api/interfaces/TfvcInterfaces";
+import * as vsoNodeApi from "azure-devops-node-api";
 
-// function deleteDirectories() {
-//     try{
-//         // Delete dirs. 
-//         fs.rmdir(MANIFEST_REPO,()=>{})
-//         fs.rmdir(HLD_REPO,()=>{})
-//         fs.rmdir(APP_REPO,()=>{})
-//     }
-//     catch(err){
-//         console.error(`Error deleting dirs!\n${err}`)
-//     }
-// };
-
-// function deleteDirectoriesV2(dirList: string[]) {
-//     for (let dirName of dirList) {
-//         if(fs.existsSync(dirName)){
-//             console.log(`Current dir to delete: ${dirName}`)
-//             exec("rm", ["-rf",dirName])
-//                 .then(stdout => console.log(stdout))
-//                 .catch(stderr => console.error(stderr)); //Hack to recursively force delete
-//             fs.rmdir(dirName).then(()=>{})
-//             .catch(err=>{logger.error(`Error deleting ${dirName}\n${err}`)})
-//         }
-//     }
-// };
-
-export async function getApi(serverUrl: string): Promise<vm.WebApi> {
+export async function getApi(serverUrl: string, accessToken:string): Promise<vm.WebApi> {
     return new Promise<vm.WebApi>(async (resolve, reject) => {
         try {
-            let token = constants.ACCESS_TOKEN;// getEnv("API_TOKEN");
-            let authHandler = vm.getPersonalAccessTokenHandler(token);
+            let authHandler = vm.getPersonalAccessTokenHandler(accessToken);
             let option = undefined;
-
-            // The following sample is for testing proxy
-            // option = {
-            //     proxy: {
-            //         proxyUrl: "http://127.0.0.1:8888"
-            //         // proxyUsername: "1",
-            //         // proxyPassword: "1",
-            //         // proxyBypassHosts: [
-            //         //     "github\.com"
-            //         // ],
-            //     },
-            //     ignoreSslError: true
-            // };
-
-            // The following sample is for testing cert
-            // option = {
-            //     cert: {
-            //         caFile: "E:\\certutil\\doctest\\ca2.pem",
-            //         certFile: "E:\\certutil\\doctest\\client-cert2.pem",
-            //         keyFile: "E:\\certutil\\doctest\\client-cert-key2.pem",
-            //         passphrase: "test123",
-            //     },
-            // };
 
             let vsts: vm.WebApi = new vm.WebApi(serverUrl, authHandler, option);
             let connData: lim.ConnectionData = await vsts.connect();
@@ -71,20 +21,40 @@ export async function getApi(serverUrl: string): Promise<vm.WebApi> {
     });
 }
 
-function getEnv(name: string): string {
-    let val = process.env[name];
-    if (!val) {
-        console.error(`${name} env var not set`);
-        process.exit(1);
+export async function getWebApi(azureOrgUrl: string, accessToken: string): Promise<vm.WebApi> {
+    return await getApi(azureOrgUrl,accessToken);
+}
+
+export async function findRepoInAzureOrg(azureOrgUrl: string, accessToken: string, repoName: string) : Promise<GitRepository> {
+    const vstsCollectionLevel: vsoNodeApi.WebApi = await getWebApi(azureOrgUrl,accessToken); //org url
+    const gitApi = await vstsCollectionLevel.getGitApi();
+    const respositories: GitRepository[] = await gitApi.getRepositories();
+
+    if (respositories) {
+        console.log(`found ${respositories.length} respositories`);
+        var foundRepo = respositories.find(repo => repo.name==repoName);
+        if (foundRepo){       
+            console.log("We found: "+foundRepo.name)
+            return foundRepo;
+        }
     }
-    return val;
+    else{
+        console.log("Found no repos...")
+    }
+    return {}; //I don't like returning an empty object
 }
 
-export function getProject(): string {
-    return constants.AZDO_PROJECT;// getEnv("API_PROJECT");
-}
-
-export async function getWebApi(serverUrl?: string): Promise<vm.WebApi> {
-    serverUrl = serverUrl || constants.AZDO_ORG_URL//getEnv("API_URL");
-    return await getApi(serverUrl);
+export async function deleteRepoInAzureOrg(azureOrgUrl: string, accessToken: string, repo: GitRepository, projectName: string) {
+    console.log("Found remote repo "+repo.name+". Attempting to delete")
+    const vstsCollectionLevel: vsoNodeApi.WebApi = await getWebApi(azureOrgUrl,accessToken); //org url
+    const gitApi = await vstsCollectionLevel.getGitApi();
+    if(repo.id){
+        await gitApi.deleteRepository(repo.id, projectName)
+        console.log("Deleted repository "+repo.name)
+    }
+    else{
+        throw new Error(
+            'Repository Id is undefined, cannot delete repository'
+          )
+    }
 }
