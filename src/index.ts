@@ -12,6 +12,7 @@ import fs from "fs-extra";
 import path from "path";
 import simplegit from "simple-git/promise"
 import { IGitApi } from "azure-devops-node-api/GitApi";
+import { GitObjectType } from "azure-devops-node-api/interfaces/GitInterfaces";
 let gitApi: IGitApi | undefined;
 
 const Spinner = cli.Spinner
@@ -170,6 +171,15 @@ const moveToPath = (relativePath: string) => {
     try{
         await git.init()
         console.log("git init called")
+        var statusResult = await git.status()
+        
+        for( let fileName of statusResult.files) {
+            console.log(fileName);
+        };
+        for( let fileName of statusResult.not_added) {
+            console.log(fileName);
+        };
+        // console.log(`Status result: ${statusResult.files.length}`)
     }
     catch(err)
     {

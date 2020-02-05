@@ -101,4 +101,4 @@ typings/
 junit.xml
 
 
-test-env/
+test-env/**
