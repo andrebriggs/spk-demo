@@ -9,11 +9,17 @@ import { exec } from "../../spk/src/lib/shell";
 // import { logger } from "../../spk/src/logger";
 import { execute as hldExecute, initialize as hldInitialize} from "../../spk/src/commands/hld/init";
 import fs from "fs-extra";
+import * as common from "./utils";
+
 import path from "path";
 import simplegit from "simple-git/promise"
 import { IGitApi } from "azure-devops-node-api/GitApi";
 import { GitObjectType } from "azure-devops-node-api/interfaces/GitInterfaces";
+import * as bi from "azure-devops-node-api/interfaces/BuildInterfaces";
+import * as vsoNodeApi from "azure-devops-node-api";
+import { GitRepository, TfvcChangesetRef } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 let gitApi: IGitApi | undefined;
+import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
 
 const Spinner = cli.Spinner
 const spawn = require('child_process').spawn
@@ -133,7 +139,7 @@ export const pushBranch = async (branchName: string): Promise<void> => {
 let manifestRepoFiles: string[] = ["README.md"];
 // let hldRepoFiles: string[] = ["README.md"];
 // let appRepoFiles: string[] = ["README.md"];
-const git = simplegit();
+
 
 
 function logCurrentDirectory() {
@@ -155,44 +161,158 @@ const moveToRelativePath = (relativePath: string) => {
 const moveToPath = (relativePath: string) => {
     process.chdir(path.join(process.cwd(),relativePath));
 };
+const moveToAbsPath = (absPath: string) => {
+    process.chdir(absPath);
+};
+
+const homedir = require('os').homedir();
+const WORKSPACE_DIR = path.resolve(path.join(homedir,constants.WORKSPACE));
+
+async function findRepoInAzureOrg(repoName: string) : Promise<GitRepository> {
+    const vstsCollectionLevel: vsoNodeApi.WebApi = await common.getWebApi(); //org url
+    const gitApi = await vstsCollectionLevel.getGitApi();
+    const respositories: GitRepository[] = await gitApi.getRepositories();
+
+    if (respositories) {
+        console.log(`found ${respositories.length} respositories`);
+        var foundRepo = respositories.find(repo => repo.name==repoName);
+        if (foundRepo){       
+            console.log("We found: "+foundRepo.name)
+            return foundRepo;
+        }
+    }
+    else{
+        console.log("Found no repos...")
+    }
+    return {}; //I don't like returning an empty object
+}
+
+async function deleteRepoInAzureOrg(repo: GitRepository, projectName: string) {
+    const vstsCollectionLevel: vsoNodeApi.WebApi = await common.getWebApi(); //org url
+    const gitApi = await vstsCollectionLevel.getGitApi();
+    if(repo.id){
+        await gitApi.deleteRepository(repo.id, projectName)
+        console.log("Deleted repository "+repo.name)
+    }
+    else{
+        throw new Error(
+            'Repository Id is undefined, cannot delete repository'
+          )
+    }
+}
+
+async function createRepoInAzureOrg(repoName: string, projectName: string) : Promise<GitRepository> {
+    const vstsCollectionLevel: vsoNodeApi.WebApi = await common.getWebApi(); //org url
+    const gitApi = await vstsCollectionLevel.getGitApi();
+    const createOptions: GitInterfaces.GitRepositoryCreateOptions = <GitInterfaces.GitRepositoryCreateOptions>{name: repoName,project: projectName};
+    return await gitApi.createRepository(createOptions,projectName);
+}
+
 
 (async () => {
+
+        // //Find repo
+        // if (respositories) {
+        //     console.log(`found ${respositories.length} respositories`);
+        //     var foundRepo = respositories.find(repo => repo.name=="manifest_repo");
+        //     if (foundRepo){
+        //         console.log("We found: "+foundRepo.name)
+        //     }
+        //     // for(let repo of respositories){
+        //     //     console.log(repo.name)
+        //     // }
+        // }
+        // else{
+        //     console.log("Found no repos...")
+        // }
+
+
+
     init()
-    if(fs.existsSync(constants.WORKSPACE)){
-        rimraf(constants.WORKSPACE, function () { console.log(`Deleted ${constants.WORKSPACE}!`); });
+    console.log(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`)
+    if(fs.existsSync(WORKSPACE_DIR)){
+        rimraf.sync(WORKSPACE_DIR);
     }
     // var currentPath = getFullPath(constants.WORKSPACE)
-    createDirectory(constants.WORKSPACE)
-    moveToPath(constants.WORKSPACE)
+    createDirectory(WORKSPACE_DIR)
+    moveToAbsPath(WORKSPACE_DIR)
         
     createDirectory(constants.MANIFEST_REPO)
     moveToRelativePath(constants.MANIFEST_REPO)
 
+    var gitRepo = await findRepoInAzureOrg(constants.MANIFEST_REPO);
+    let resultRepo: GitRepository;
+    if(gitRepo.id){       
+        console.log("Found remote repo "+constants.MANIFEST_REPO+". Attempting to delete")
+        await deleteRepoInAzureOrg(gitRepo,constants.AZDO_PROJECT);
+    }
+    resultRepo = await createRepoInAzureOrg(constants.MANIFEST_REPO,constants.AZDO_PROJECT)
+    console.log("Result repo: "+resultRepo.remoteUrl);
+
+    // resultRepo.remoteUrl
     try{
-        await git.init()
-        console.log("git init called")
+        logCurrentDirectory()
+        const git = simplegit();
+        if (!await git.checkIsRepo()){
+            await git.init()
+            console.log(`Git init called in ${process.cwd()}`)
+        }
+        
+        fs.createFileSync("README.md");
+        
+        // Add files
+        await git.add("./README.md")
+
+        //Get git status and get various information
         var statusResult = await git.status()
         
+        console.log("Files in local Git:")
         for( let fileName of statusResult.files) {
-            console.log(fileName);
+            console.log("\t"+fileName.path);
         };
+
+        console.log("Files added to Git:")
+        for( let fileName of statusResult.created) {
+            console.log("\t"+fileName);
+        };
+
+        console.log(chalk.yellow("Files not added to Git:"))
         for( let fileName of statusResult.not_added) {
-            console.log(fileName);
+            console.log("\t"+fileName);
         };
-        // console.log(`Status result: ${statusResult.files.length}`)
+        
+        //Commit and check the local git log
+        await git.commit("Initial commit for Manifest repo")
+
+        var resultLog = await git.log()
+        console.log("Log Messages from Git:")
+        for( let logField of resultLog.all) {
+            console.log("\t"+logField.date +" --> "+logField.message);
+        };
+
+        // We know AzDO url style so hack it for now instead of discovering via API
+        const remoteURL=
+        `dev.azure.com/${constants.AZDO_ORG}/${constants.AZDO_PROJECT}/_git/${constants.MANIFEST_REPO}`
+
+        const remote = `https://${constants.USER}:${constants.ACCESS_TOKEN}@${remoteURL}`;
+
+        // Push to remote
+        await git.addRemote('origin', remote)
+        await git.push('origin', 'master');
+
+        console.log("Finished pushing manifest repo!") 
     }
     catch(err)
     {
-        console.log(err)
+        //TODO err displays access token
+        console.log(`An error occured: ${err}`)
     }
-    // git.init().then(()=>{
-    //     console.log("git init called")
-    //     logCurrentDirectory()
-    //     fs.createFileSync("README.md");
-    //     fs.readdirSync(process.cwd()).forEach(file => {
-    //         console.log(file);
-    //       });
-    // })
+
+
+
+
+
+ 
 
     // createDirectory(constants.HLD_REPO)
     // createDirectory(constants.APP_REPO)
@@ -207,24 +327,6 @@ const moveToPath = (relativePath: string) => {
     //     console.log("https://dev.azure.com/"+answers.azdo_org_name+"/"+answers.azdo_project_name)      
     // });
    
-    
-
-    // var currentPath = getFullPath(constants.MANIFEST_REPO)
-    // process.chdir(currentPath)
-    // logCurrentDirectory()
-
-
-    // exec("git", ["init"]).then(stdout => console.log(stdout));
-    
-    
-    // git.add("README.md").then(()=>{
-    //     exec("git", ["status", "."]).then(stdout => console.log(stdout))
-    //     // const stats = git.status();
-    // })
-    
-    // exec("ls", ["-ls"]).then(stdout => console.log(stdout))
-
-    
     // fs.mkdir(HLD_REPO,()=> {logger.info(`Wrote dir ${ HLD_REPO }`)})
     // exec("git", ["init"]);
     // logger.info(`Current dir ${process.cwd}`)
@@ -232,12 +334,6 @@ const moveToPath = (relativePath: string) => {
     // exec("git",["add", "-A"])
     // exec("git",["commit", "-m","'initial commit'"])
     // gitApi?.getRepositories
-
-
-
-
-    // fs.mkdir(HLD_REPO,()=> {logger.info(`Wrote dir ${ HLD_REPO }`)})
-    // fs.mkdir(APP_REPO,()=> {logger.info(`Wrote dir ${ APP_REPO }`)})
 
     // console.log(chalk.yellow("You chose wisely 🧙‍♂️"))
 
