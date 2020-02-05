@@ -1,7 +1,6 @@
-import * as constants from "./constant_values";
 import * as vm from "azure-devops-node-api";
 import * as lim from "azure-devops-node-api/interfaces/LocationsInterfaces";
-import { GitRepository, TfvcChangesetRef } from "azure-devops-node-api/interfaces/TfvcInterfaces";
+import { GitRepository } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 import * as vsoNodeApi from "azure-devops-node-api";
 
 export async function getApi(serverUrl: string, accessToken:string): Promise<vm.WebApi> {

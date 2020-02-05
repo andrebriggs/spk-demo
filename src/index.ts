@@ -6,16 +6,13 @@ import chalk from "chalk"
 import cli  from "clui"
 import inquirer from 'inquirer'
 import { exec } from "../../spk/src/lib/shell";
-// import { logger } from "../../spk/src/logger";
 import { execute as hldExecute, initialize as hldInitialize} from "../../spk/src/commands/hld/init";
 import fs from "fs-extra";
-import * as azOps from "./utils";
+import * as azOps from "./az_utils";
 
 import path from "path";
 import simplegit, { StatusResult, SimpleGit } from "simple-git/promise"
 import { IGitApi } from "azure-devops-node-api/GitApi";
-import { GitObjectType } from "azure-devops-node-api/interfaces/GitInterfaces";
-import * as bi from "azure-devops-node-api/interfaces/BuildInterfaces";
 import * as vsoNodeApi from "azure-devops-node-api";
 import { GitRepository, TfvcChangesetRef } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 let gitApi: IGitApi | undefined;
@@ -222,24 +219,25 @@ async function commitAndPushToRemote(git: SimpleGit, azureOrgName: string, azure
     if(fs.existsSync(WORKSPACE_DIR)){
         rimraf.sync(WORKSPACE_DIR);
     }
-
     createDirectory(WORKSPACE_DIR)
-    moveToAbsPath(WORKSPACE_DIR)
-        
-    createDirectory(constants.MANIFEST_REPO)
-    moveToRelativePath(constants.MANIFEST_REPO)
 
-    var gitRepo = await azOps.findRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,constants.MANIFEST_REPO);
-    let resultRepo: GitRepository;
-
-    if(gitRepo.id){       
-        
-        await azOps.deleteRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,gitRepo,constants.AZDO_PROJECT);
-    }
-    resultRepo = await createRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,constants.MANIFEST_REPO,constants.AZDO_PROJECT)
-    console.log("Result repo: "+resultRepo.remoteUrl);
-
+    //Set up Manifest Repo
     try{
+        const currentRepo = constants.MANIFEST_REPO
+        moveToAbsPath(WORKSPACE_DIR)
+        createDirectory(currentRepo)
+        moveToRelativePath(currentRepo)
+
+        var gitRepo = await azOps.findRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,currentRepo);
+        let resultRepo: GitRepository;
+
+        if(gitRepo.id){       
+            
+            await azOps.deleteRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,gitRepo,constants.AZDO_PROJECT);
+        }
+        resultRepo = await createRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,currentRepo,constants.AZDO_PROJECT)
+        console.log("Result repo: "+resultRepo.remoteUrl);
+
         logCurrentDirectory()
         const git = simplegit();
         if (!await git.checkIsRepo()){
@@ -251,7 +249,7 @@ async function commitAndPushToRemote(git: SimpleGit, azureOrgName: string, azure
         fs.createFileSync("README.md");
         await git.add("./README.md")
 
-        commitAndPushToRemote(git,constants.AZDO_ORG,constants.AZDO_PROJECT,constants.ACCESS_TOKEN,constants.MANIFEST_REPO)
+        await commitAndPushToRemote(git,constants.AZDO_ORG,constants.AZDO_PROJECT,constants.ACCESS_TOKEN,currentRepo)
     }
     catch(err)
     {
@@ -259,13 +257,43 @@ async function commitAndPushToRemote(git: SimpleGit, azureOrgName: string, azure
         console.log(`An error occured: ${err}`)
     }
 
+    //Set up HLD Repo
+    try{
+        const currentRepo = constants.HLD_REPO
+        moveToAbsPath(WORKSPACE_DIR)
+        createDirectory(currentRepo)
+        moveToRelativePath(currentRepo)
 
+        var gitRepo = await azOps.findRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,currentRepo);
+        let resultRepo: GitRepository;
 
+        if(gitRepo.id){       
+            
+            await azOps.deleteRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,gitRepo,constants.AZDO_PROJECT);
+        }
+        resultRepo = await createRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,currentRepo,constants.AZDO_PROJECT)
+        console.log("Result repo: "+resultRepo.remoteUrl);
 
+        logCurrentDirectory()
+        const git = simplegit();
+        if (!await git.checkIsRepo()){
+            await git.init()
+            console.log(`Git init called in ${process.cwd()}`)
+        }
+        
+        // Create and add files
+        await hldInitialize(".",false);
+        await git.add("./*")
+        logGitInformation(await git.status())
 
- 
+        await commitAndPushToRemote(git,constants.AZDO_ORG,constants.AZDO_PROJECT,constants.ACCESS_TOKEN,currentRepo)
+    }
+    catch(err)
+    {
+        //TODO err displays access token
+        console.log(`An error occured: ${err}`)
+    }
 
-    // createDirectory(constants.HLD_REPO)
     // createDirectory(constants.APP_REPO)
 
     // logCurrentDirectory()
@@ -277,14 +305,6 @@ async function commitAndPushToRemote(git: SimpleGit, azureOrgName: string, azure
     //     console.log("Project Name:\t"+answers.azdo_project_name);
     //     console.log("https://dev.azure.com/"+answers.azdo_org_name+"/"+answers.azdo_project_name)      
     // });
-   
-    // fs.mkdir(HLD_REPO,()=> {logger.info(`Wrote dir ${ HLD_REPO }`)})
-    // exec("git", ["init"]);
-    // logger.info(`Current dir ${process.cwd}`)
-    // hldInitialize(HLD_REPO,false);
-    // exec("git",["add", "-A"])
-    // exec("git",["commit", "-m","'initial commit'"])
-    // gitApi?.getRepositories
 
     // console.log(chalk.yellow("You chose wisely 🧙‍♂️"))
 
