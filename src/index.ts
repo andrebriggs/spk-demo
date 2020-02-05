@@ -6,6 +6,7 @@ import chalk from "chalk"
 import cli  from "clui"
 import inquirer from 'inquirer'
 import { exec } from "../../spk/src/lib/shell";
+
 import { execute as hldExecute, initialize as hldInitialize} from "../../spk/src/commands/hld/init";
 import fs from "fs-extra";
 import * as azOps from "./az_utils";
@@ -17,6 +18,7 @@ import * as vsoNodeApi from "azure-devops-node-api";
 import { GitRepository, TfvcChangesetRef } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 let gitApi: IGitApi | undefined;
 import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
+import { disableVerboseLogging, logger } from "../../spk/src/logger";
 
 const Spinner = cli.Spinner
 const spawn = require('child_process').spawn
@@ -39,12 +41,32 @@ const installHelper = (command: string, onSuccess: { (): void; (): void }, spinn
         })
     })
 }
+const installPromiseHelper = (delegate: Promise<void>, onSuccess: { (): void; (): void }, spinner: cli.Spinner) => {
+    return new Promise(async (resolve, reject) => {
+        
+        spinner.start()
+        await delegate.then(() => {
+            spinner.stop()
+            onSuccess()
+            resolve()
+        })
+    })
+}
 
 const installSpinner = async (installSubject: string) => {
     const spinner = new Spinner("Installing "+installSubject)
     return installHelper(
         // 'yarn add -D prettier',
         'sleep 5',
+        () => console.log(chalk.green("Done installing "+installSubject)),
+        spinner
+    )
+}
+const installPromiseSpinner = async (installSubject: string, delegate: Promise<void>) => {
+    const spinner = new Spinner("Installing "+installSubject)
+    return installPromiseHelper(
+        // 'yarn add -D prettier',
+        delegate,
         () => console.log(chalk.green("Done installing "+installSubject)),
         spinner
     )
@@ -138,7 +160,7 @@ let manifestRepoFiles: string[] = ["README.md"];
 // let appRepoFiles: string[] = ["README.md"];
 
 function logCurrentDirectory() {
-    console.log('Current directory: ' + process.cwd());
+    logger.info('Current directory: ' + process.cwd());
 }
 
 const createDirectory = (dirName: string) => {
@@ -171,19 +193,19 @@ async function createRepoInAzureOrg(azureOrgUrl: string, accessToken: string,rep
 }
 
 const logGitInformation = (gitStatus: StatusResult) =>{
-    console.log("Files in local Git:")
+    logger.info("Files in local Git:")
     for( let fileName of gitStatus.files) {
-        console.log("\t"+fileName.path);
+        logger.info("\t"+fileName.path);
     };
 
-    console.log("Files added to Git:")
+    logger.info("Files added to Git:")
     for( let fileName of gitStatus.created) {
-        console.log("\t"+fileName);
+        logger.info("\t"+fileName);
     };
 
-    console.log(chalk.yellow("Files not added to Git:"))
+    logger.info(chalk.yellow("Files not added to Git:"))
     for( let fileName of gitStatus.not_added) {
-        console.log("\t"+fileName);
+        logger.info("\t"+fileName);
     };
 }
 
@@ -192,9 +214,9 @@ async function commitAndPushToRemote(git: SimpleGit, azureOrgName: string, azure
        await git.commit(`Initial commit for ${repoName} repo`)
 
        var resultLog = await git.log()
-       console.log("Log Messages from Git:")
+       logger.info("Log Messages from Git:")
        for( let logField of resultLog.all) {
-           console.log("\t"+logField.date +" --> "+logField.message);
+           logger.info("\t"+logField.date +" --> "+logField.message);
        };
 
        // We know AzDO url style so hack it for now instead of discovering via API
@@ -207,78 +229,81 @@ async function commitAndPushToRemote(git: SimpleGit, azureOrgName: string, azure
        await git.addRemote('origin', remote)
        await git.push('origin', 'master');
 
-       console.log(`Finished pushing ${repoName} repo!`) 
+       logger.info(`Finished pushing ${repoName} repo!`) 
 }
 
 
-
-(async () => {
-
-    init()
-    console.log(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`)
-    if(fs.existsSync(WORKSPACE_DIR)){
-        rimraf.sync(WORKSPACE_DIR);
-    }
-    createDirectory(WORKSPACE_DIR)
-
+async function scaffoldManifestRepo(){
     //Set up Manifest Repo
     try{
         const currentRepo = constants.MANIFEST_REPO
+        const azureOrgUrl = constants.AZDO_ORG_URL 
+        const azureOrgName = constants.AZDO_ORG
+        const azureProjectName = constants.AZDO_PROJECT
+        const accessToken = constants.ACCESS_TOKEN
+
         moveToAbsPath(WORKSPACE_DIR)
         createDirectory(currentRepo)
         moveToRelativePath(currentRepo)
 
-        var gitRepo = await azOps.findRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,currentRepo);
+        var gitRepo = await azOps.findRepoInAzureOrg(azureOrgUrl,accessToken,currentRepo);
         let resultRepo: GitRepository;
 
         if(gitRepo.id){       
             
-            await azOps.deleteRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,gitRepo,constants.AZDO_PROJECT);
+            await azOps.deleteRepoInAzureOrg(azureOrgUrl,accessToken,gitRepo,azureProjectName);
         }
-        resultRepo = await createRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,currentRepo,constants.AZDO_PROJECT)
-        console.log("Result repo: "+resultRepo.remoteUrl);
+        resultRepo = await createRepoInAzureOrg(azureOrgUrl,accessToken,currentRepo,azureProjectName)
+        logger.info("Result repo: "+resultRepo.remoteUrl);
 
         logCurrentDirectory()
         const git = simplegit();
         if (!await git.checkIsRepo()){
             await git.init()
-            console.log(`Git init called in ${process.cwd()}`)
+            logger.info(`Git init called in ${process.cwd()}`)
         }
         
         // Create and add files
         fs.createFileSync("README.md");
         await git.add("./README.md")
 
-        await commitAndPushToRemote(git,constants.AZDO_ORG,constants.AZDO_PROJECT,constants.ACCESS_TOKEN,currentRepo)
+        await commitAndPushToRemote(git,azureOrgName,azureProjectName,accessToken,currentRepo)
     }
     catch(err)
     {
         //TODO err displays access token
-        console.log(`An error occured: ${err}`)
+        logger.error(`An error occured: ${err}`)
     }
+}
 
+async function scaffoldHLDRepo(){
     //Set up HLD Repo
     try{
         const currentRepo = constants.HLD_REPO
+        const azureOrgUrl = constants.AZDO_ORG_URL 
+        const azureOrgName = constants.AZDO_ORG
+        const azureProjectName = constants.AZDO_PROJECT
+        const accessToken = constants.ACCESS_TOKEN
+
         moveToAbsPath(WORKSPACE_DIR)
         createDirectory(currentRepo)
         moveToRelativePath(currentRepo)
 
-        var gitRepo = await azOps.findRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,currentRepo);
+        var gitRepo = await azOps.findRepoInAzureOrg(azureOrgUrl,accessToken,currentRepo);
         let resultRepo: GitRepository;
 
         if(gitRepo.id){       
             
-            await azOps.deleteRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,gitRepo,constants.AZDO_PROJECT);
+            await azOps.deleteRepoInAzureOrg(azureOrgUrl,accessToken,gitRepo,azureProjectName);
         }
-        resultRepo = await createRepoInAzureOrg(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN,currentRepo,constants.AZDO_PROJECT)
-        console.log("Result repo: "+resultRepo.remoteUrl);
+        resultRepo = await createRepoInAzureOrg(azureOrgUrl,accessToken,currentRepo,azureProjectName)
+        logger.info("Result repo: "+resultRepo.remoteUrl);
 
         logCurrentDirectory()
         const git = simplegit();
         if (!await git.checkIsRepo()){
             await git.init()
-            console.log(`Git init called in ${process.cwd()}`)
+            logger.info(`Git init called in ${process.cwd()}`)
         }
         
         // Create and add files
@@ -286,13 +311,31 @@ async function commitAndPushToRemote(git: SimpleGit, azureOrgName: string, azure
         await git.add("./*")
         logGitInformation(await git.status())
 
-        await commitAndPushToRemote(git,constants.AZDO_ORG,constants.AZDO_PROJECT,constants.ACCESS_TOKEN,currentRepo)
+        await commitAndPushToRemote(git,azureOrgName,azureProjectName,accessToken,currentRepo)
     }
     catch(err)
     {
         //TODO err displays access token
-        console.log(`An error occured: ${err}`)
+        logger.info(`An error occured: ${err}`)
     }
+}
+
+(async () => {
+    //Silent the SPK logger for CLI and File outputs
+    logger.transports.forEach((t) => (t.silent = true));
+
+    //Silence dedault logger
+    // console.log = function() {}
+
+    init()
+    logger.info(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`)
+    if(fs.existsSync(WORKSPACE_DIR)){
+        rimraf.sync(WORKSPACE_DIR);
+    }
+    createDirectory(WORKSPACE_DIR);
+    await installPromiseSpinner("manifest repo",scaffoldManifestRepo());
+    await installPromiseSpinner("hld repo",scaffoldHLDRepo());
+
 
     // createDirectory(constants.APP_REPO)
 
