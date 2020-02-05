@@ -18,7 +18,7 @@ Current this prototype assuming the repo for this project is a sibling to a the 
 
 ## Current Ability
 
-* There is a prototype of creating Manifest and HLD repos.
+![fsdf](demo.gif)
 
 ------
 ## TypeScript Links
