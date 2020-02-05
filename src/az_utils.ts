@@ -1,7 +1,11 @@
 import * as vsoNodeApi from "azure-devops-node-api";
+import {
+  Build,
+  BuildDefinition,
+  BuildDefinitionReference
+} from "azure-devops-node-api/interfaces/BuildInterfaces";
 import { GitRepository } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 import { logger } from "../../spk/src/logger";
-import { BuildDefinitionReference } from "azure-devops-node-api/interfaces/BuildInterfaces";
 
 export const getApi = async (
   serverUrl: string,
@@ -73,7 +77,7 @@ export const deleteRepoInAzureOrg = async (
   }
 };
 
-export const getPipeline = async (
+export const getPipelineByName = async (
   azureOrgUrl: string,
   accessToken: string,
   projectName: string,
@@ -105,6 +109,23 @@ export const deletePipeline = async (
     await buildApi.deleteDefinition(projectName, id);
   } catch (e) {
     logger.error(`Error in deleting pipeline ${pipelineName}`);
+    throw e;
+  }
+};
+
+export const getPipelineBuild = async (
+  azureOrgUrl: string,
+  accessToken: string,
+  projectName: string,
+  pipelineName: string
+): Promise<Build> => {
+  try {
+    logger.info(`Getting queue ${pipelineName}`);
+    const vstsCollectionLevel = await getWebApi(azureOrgUrl, accessToken);
+    const buildApi = await vstsCollectionLevel.getBuildApi();
+    return await buildApi.getLatestBuild(projectName, pipelineName);
+  } catch (e) {
+    logger.error(`Error in getting build ${pipelineName}`);
     throw e;
   }
 };

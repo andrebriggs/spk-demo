@@ -1,3 +1,4 @@
+
 import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
 import { GitRepository } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 
@@ -7,17 +8,12 @@ import clear from "clear";
 import cli from "clui";
 import fs from "fs-extra";
 import inquirer from "inquirer";
+
 import os from "os";
 import path from "path";
 import simplegit, { SimpleGit, StatusResult  } from "simple-git/promise";
 
 import { initialize as hldInitialize} from "../../spk/src/commands/hld/init";
-import {
-  ICommandOptions as IHldToManifestPipelineValues,
-  installHldToManifestPipeline
-} from "../../spk/src/commands/hld/pipeline";
-import { BUILD_SCRIPT_URL } from "../../spk/src/lib/constants";
-import { getRepositoryName } from "../../spk/src/lib/gitutils";
 import { removeDir } from "../../spk/src/lib/ioUtil";
 import { exec } from "../../spk/src/lib/shell";
 
@@ -25,6 +21,8 @@ import { hasValue } from "../../spk/src/lib/validator";
 import { logger } from "../../spk/src/logger";
 import * as azOps from "./az_utils";
 import * as constants from "./constant_values";
+import { createHLDtoManifestPipeline } from "./HLDToManifestPipeline";
+
 
 const spawn = child_process.spawn;
 const Spinner = cli.Spinner;
@@ -320,41 +318,6 @@ const scaffoldHLDRepo = async () => {
   }
 };
 
-const createHLDtoManifestPipeline = async () => {
-  const pipelineName = `${constants.HLD_REPO}-to-${constants.MANIFEST_REPO}`;
-
-  try {
-    const pipeline = await azOps.getPipeline(
-      constants.AZDO_ORG_URL,
-      constants.ACCESS_TOKEN,
-      constants.AZDO_PROJECT,
-      pipelineName
-    );
-    if (pipeline) {
-      console.log(`${pipelineName} is found, deleting it`);
-      await azOps.deletePipeline(
-        constants.AZDO_ORG_URL,
-        constants.ACCESS_TOKEN,
-        constants.AZDO_PROJECT,
-        pipelineName,
-        pipeline.id!);
-    }
-    const vals: IHldToManifestPipelineValues = {
-      buildScriptUrl: BUILD_SCRIPT_URL,
-      devopsProject: constants.AZDO_PROJECT,
-      hldName: getRepositoryName(hldUrl),
-      hldUrl,
-      manifestUrl,
-      orgName: constants.AZDO_ORG,
-      personalAccessToken: constants.ACCESS_TOKEN,
-      pipelineName,
-    };
-    await installHldToManifestPipeline(vals);
-  } catch (err) {
-    logger.error(`An error occured in create HLD to Manifest Pipeline`);
-    throw err;
-  }
-};
 
 (async () => {
   // Silent the SPK logger for CLI and File outputs
@@ -377,7 +340,8 @@ const createHLDtoManifestPipeline = async () => {
   createDirectory(WORKSPACE_DIR);
   await installPromiseSpinner("manifest repo", scaffoldManifestRepo());
   await installPromiseSpinner("hld repo", scaffoldHLDRepo());
-  await installPromiseSpinner("hld -> repo pipeline", createHLDtoManifestPipeline());
+  await installPromiseSpinner("hld -> repo pipeline",
+    createHLDtoManifestPipeline(manifestUrl, hldUrl));
 
   // createDirectory(constants.APP_REPO)
 
