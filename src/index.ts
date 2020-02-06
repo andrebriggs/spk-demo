@@ -368,14 +368,14 @@ const scaffoldHLDRepo = async () => {
   var userName = await azOps.getAuthUserName(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN);
   const firstName = userName.split(" ")[0]
 
-//   logger.info(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`);
-//   if (fs.existsSync(WORKSPACE_DIR)) {
-//     removeDir(WORKSPACE_DIR);
-//   }
-//   createDirectory(WORKSPACE_DIR);
-//   await installPromiseSpinner("manifest repo", scaffoldManifestRepo());
-//   await installPromiseSpinner("hld repo", scaffoldHLDRepo());
-//   await installPromiseSpinner("hld -> repo pipeline", createHLDtoManifestPipeline(manifestUrl, hldUrl));
+  logger.info(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`);
+  if (fs.existsSync(WORKSPACE_DIR)) {
+    removeDir(WORKSPACE_DIR);
+  }
+  createDirectory(WORKSPACE_DIR);
+  await installPromiseSpinner("manifest repo", scaffoldManifestRepo());
+  await installPromiseSpinner("hld repo", scaffoldHLDRepo());
+  await installPromiseSpinner("hld -> repo pipeline", createHLDtoManifestPipeline(manifestUrl, hldUrl));
 
   const pipelineUrl= `${azureDevOpsPath}/_build`
   const installAppRepo =  await askToInstallAppRepo(firstName);
