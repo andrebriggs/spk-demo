@@ -22,6 +22,7 @@ import { logger } from "../../spk/src/logger";
 import * as azOps from "./az_utils";
 import * as constants from "./constant_values";
 import { createHLDtoManifestPipeline } from "./HLDToManifestPipeline";
+import open from "open";
 
 
 const spawn = child_process.spawn;
@@ -32,7 +33,7 @@ let manifestUrl: string = "";
 const init = async () => {
   clear();
   console.log(
-    chalk.blueBright("Welcome SPK Quick Start!")
+    chalk.bold.whiteBright("Welcome SPK Quick Start!")
   );
 };
 
@@ -77,6 +78,10 @@ const installSpinner = async (installSubject: string) => {
   );
 };
 
+function isEmpty(str: string) {
+    return (!str || 0 === str.length);
+}
+
 const installPromiseSpinner = async (
   installSubject: string,
   delegate: Promise<void>
@@ -102,6 +107,32 @@ const installPromiseSpinner = async (
 //   }];
 //   return inquirer.prompt(questions)
 // }
+
+const askToInstallAppRepo= (firstName: string) => {
+  const questions = [{
+    name: 'is_app_repo',
+    type: 'list',
+    choices: ['.Yes', '.No'],
+    message: `${firstName}, would you like use a sample application repository?`,
+    filter: function(val: string) {
+      return val === '.Yes' ? true : false
+    },
+  }];
+  return inquirer.prompt(questions)
+}
+
+const askToSeePipelines= (firstName: string) => {
+  const questions = [{
+    name: 'go_to_pipelines',
+    type: 'list',
+    choices: ['.Yes', '.No'],
+    message: `${firstName}, would you like see your GitOps pipelines?`,
+    filter: function(val: string) {
+      return val === '.Yes' ? true : false
+    },
+  }];
+  return inquirer.prompt(questions)
+}
 
 // const requireLetterAndNumber = value => {
 //     if (/\w/.test(value) && /\d/.test(value)) {
@@ -321,27 +352,43 @@ const scaffoldHLDRepo = async () => {
 
 (async () => {
   // Silent the SPK logger for CLI and File outputs
-  // logger.transports.forEach((t) => (t.silent = true));
+  logger.transports.forEach((t) => (t.silent = true));
 
   // Silence dedault logger
   // console.log = function() {}
 
   init();
   const answer = await askOrganization();
-  console.log("Org Name:\t" + answer.azdo_org_name);
-  console.log("Project Name:\t" + answer.azdo_project_name);
-  console.log("https://dev.azure.com/" + answer.azdo_org_name + "/" + answer.azdo_project_name);
+  console.log(chalk.yellow("Org Name:\t" + answer.azdo_org_name));
+  console.log(chalk.yellow("Project Name:\t" + answer.azdo_project_name));
+  const azureDevOpsPath = "https://dev.azure.com/" + answer.azdo_org_name + "/" + answer.azdo_project_name;
+  console.log(chalk.yellow(azureDevOpsPath));
   // TODO: link the inputs
 
-  logger.info(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`);
-  if (fs.existsSync(WORKSPACE_DIR)) {
-    removeDir(WORKSPACE_DIR);
+  var userName = await azOps.getAuthUserName(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN);
+  const firstName = userName.split(" ")[0]
+
+//   logger.info(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`);
+//   if (fs.existsSync(WORKSPACE_DIR)) {
+//     removeDir(WORKSPACE_DIR);
+//   }
+//   createDirectory(WORKSPACE_DIR);
+//   await installPromiseSpinner("manifest repo", scaffoldManifestRepo());
+//   await installPromiseSpinner("hld repo", scaffoldHLDRepo());
+//   await installPromiseSpinner("hld -> repo pipeline", createHLDtoManifestPipeline(manifestUrl, hldUrl));
+
+  const pipelineUrl= `${azureDevOpsPath}/_build`
+  const installAppRepo =  await askToInstallAppRepo(firstName);
+  if(installAppRepo){
+      //TODO: Install here
   }
-  createDirectory(WORKSPACE_DIR);
-  await installPromiseSpinner("manifest repo", scaffoldManifestRepo());
-  await installPromiseSpinner("hld repo", scaffoldHLDRepo());
-  await installPromiseSpinner("hld -> repo pipeline",
-    createHLDtoManifestPipeline(manifestUrl, hldUrl));
+ 
+  const goToPipelines =  await askToSeePipelines(firstName);
+  if(goToPipelines){
+    await open(pipelineUrl);
+  }
+  console.log(chalk.bold.whiteBright(`\nGitOps pipelines at ${pipelineUrl}`));
+  
 
   // createDirectory(constants.APP_REPO)
 

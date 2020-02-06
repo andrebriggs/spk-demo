@@ -6,6 +6,7 @@ import {
 } from "azure-devops-node-api/interfaces/BuildInterfaces";
 import { GitRepository } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 import { logger } from "../../spk/src/logger";
+import * as lim from "azure-devops-node-api/interfaces/LocationsInterfaces";
 
 export const getApi = async (
   serverUrl: string,
@@ -15,7 +16,6 @@ export const getApi = async (
     try {
       const authHandler = vsoNodeApi.getPersonalAccessTokenHandler(accessToken);
       const option = undefined;
-
       const vsts: vsoNodeApi.WebApi = new vsoNodeApi.WebApi(serverUrl, authHandler, option);
       await vsts.connect();
       // logger.info(`Hello ${connData.authenticatedUser.providerDisplayName}`);
@@ -26,6 +26,23 @@ export const getApi = async (
     }
   });
 };
+
+//TODO: duplicated from getApi
+export const getAuthUserName = async (
+    serverUrl: string,
+    accessToken: string
+  ): Promise<string> => {
+
+    const authHandler = vsoNodeApi.getPersonalAccessTokenHandler(accessToken);
+    const option = undefined;
+    const vsts: vsoNodeApi.WebApi = new vsoNodeApi.WebApi(serverUrl, authHandler, option);
+    let connData: lim.ConnectionData = await vsts.connect();
+    if(connData.authenticatedUser && connData.authenticatedUser.providerDisplayName){
+        return connData.authenticatedUser.providerDisplayName;
+    }  
+    return "";
+}
+
 
 export const getWebApi = async (
   azureOrgUrl: string,
