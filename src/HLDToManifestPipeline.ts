@@ -12,6 +12,11 @@ import { getRepositoryName } from "../../spk/src/lib/gitutils";
 import { logger } from "../../spk/src/logger";
 import * as azOps from "./az_utils";
 import * as constants from "./constant_values";
+import {
+  getOrganizationName,
+  getPersonalAccessToken,
+  getProject
+} from "./SPKConfigBuilder";
 
 const sleep = (timeInSecond: number): Promise<void> => {
   return new Promise((resolve) => {
@@ -101,12 +106,12 @@ export const createHLDtoManifestPipeline = async (
     }
     const vals: IHldToManifestPipelineValues = {
       buildScriptUrl: BUILD_SCRIPT_URL,
-      devopsProject: constants.AZDO_PROJECT,
+      devopsProject: getProject(),
       hldName: getRepositoryName(hldUrl),
       hldUrl,
       manifestUrl,
-      orgName: constants.AZDO_ORG,
-      personalAccessToken: constants.ACCESS_TOKEN,
+      orgName: getOrganizationName(),
+      personalAccessToken: getPersonalAccessToken(),
       pipelineName,
     };
     await installHldToManifestPipeline(vals);

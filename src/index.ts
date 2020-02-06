@@ -13,11 +13,17 @@ import { initialize as hldInitialize} from "../../spk/src/commands/hld/init";
 import { removeDir } from "../../spk/src/lib/ioUtil";
 import { exec } from "../../spk/src/lib/shell";
 
-import { hasValue } from "../../spk/src/lib/validator";
 import { logger } from "../../spk/src/logger";
 import * as azOps from "./az_utils";
 import * as constants from "./constant_values";
 import { createHLDtoManifestPipeline } from "./HLDToManifestPipeline";
+import { ask as askQuestions, userInfo } from "./prompts";
+import {
+  getDevOpsPath,
+  getOrganizationName,
+  getPersonalAccessToken,
+  getProject
+} from "./SPKConfigBuilder";
 
 const spawn = child_process.spawn;
 const Spinner = cli.Spinner;
@@ -124,54 +130,6 @@ const askToSeePipelines= (firstName: string) => {
   return inquirer.prompt(questions);
 };
 
-// const requireLetterAndNumber = value => {
-//     if (/\w/.test(value) && /\d/.test(value)) {
-//       return true;
-//     }
-
-const askOrganization = () => {
-  const questions = [{
-    message: 'Enter {organization name}\n',
-    name: 'azdo_org_name',
-    type: 'input',
-    validate: (value: string) => {
-      const pass = value.match(
-        /^\S*$/ // No Spaces
-      );
-      if (pass) {
-        return true;
-      }
-      return 'Organization names must start with a letter or number, followed by letters, numbers or hyphens, and must end with a letter or number.';
-    }
-  }, {
-    message: 'Enter {project name}\n',
-    name: 'azdo_project_name',
-    type: 'input',
-    // validate: function(value: string) {
-    //     var pass = value.match(
-    //         /[^A-Za-z0-9-]+/ //See https://www.regextester.com
-    //     );
-    //     if (pass) {
-    //       return true;
-    //     }
-    //     //TODO: If the project name has spaces use %20
-    //     return 'Project names must start with a letter or number, followed by letters, percent, numbers or hyphens, and must end with a letter or number.';
-    //   }
-  }, {
-    mask: '*',
-    message: 'Enter your AzDO personal access token',
-    name: 'azdo_pat',
-    type: 'password',
-    validate: (value: string) => {
-      if (!hasValue(value)) {
-        return 'Must enter a personal access token with read/write/manage permissions';
-      }
-      return true;
-    }
-  }];
-
-  return inquirer.prompt(questions);
-};
 
 export const pushBranch = async (branchName: string): Promise<void> => {
   try {
@@ -185,7 +143,10 @@ const logCurrentDirectory = () => {
   logger.info(`Current directory: ${process.cwd()}`);
 };
 
-const createDirectory = (dirName: string) => {
+const createDirectory = (dirName: string, removeIfExist = false) => {
+  if (removeIfExist && fs.existsSync(dirName)) {
+    removeDir(dirName);
+  }
   fs.mkdirpSync(dirName);
 };
 
@@ -242,9 +203,9 @@ const scaffoldManifestRepo = async () => {
   // Set up Manifest Repo
   try {
     const currentRepo = constants.MANIFEST_REPO;
-    const azureOrgName = constants.AZDO_ORG;
-    const azureProjectName = constants.AZDO_PROJECT;
-    const accessToken = constants.ACCESS_TOKEN;
+    const azureOrgName = getOrganizationName();
+    const azureProjectName = getProject();
+    const accessToken = getPersonalAccessToken();
 
     moveToAbsPath(WORKSPACE_DIR);
     createDirectory(currentRepo);
@@ -260,7 +221,7 @@ const scaffoldManifestRepo = async () => {
     }
     const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
     logger.info("Result repo: " + resultRepo.remoteUrl);
-    manifestUrl = resultRepo.remoteUrl!.replace(`${constants.AZDO_ORG}@`, "");
+    manifestUrl = resultRepo.remoteUrl!.replace(`${getOrganizationName()}@`, "");
 
     logCurrentDirectory();
     const git = simplegit();
@@ -284,9 +245,9 @@ const scaffoldHLDRepo = async () => {
   // Set up HLD Repo
   try {
     const currentRepo = constants.HLD_REPO;
-    const azureOrgName = constants.AZDO_ORG;
-    const azureProjectName = constants.AZDO_PROJECT;
-    const accessToken = constants.ACCESS_TOKEN;
+    const azureOrgName = getOrganizationName();
+    const azureProjectName = getProject();
+    const accessToken = getPersonalAccessToken();
 
     moveToAbsPath(WORKSPACE_DIR);
     createDirectory(currentRepo);
@@ -303,7 +264,7 @@ const scaffoldHLDRepo = async () => {
 
     const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
     logger.info("Result repo: " + resultRepo.remoteUrl);
-    hldUrl = resultRepo.remoteUrl!.replace(`${constants.AZDO_ORG}@`, "");
+    hldUrl = resultRepo.remoteUrl!.replace(`${getOrganizationName()}@`, "");
 
     logCurrentDirectory();
     const git = simplegit();
@@ -332,34 +293,25 @@ const scaffoldHLDRepo = async () => {
   // console.log = function() {}
 
   init();
-  const answer = await askOrganization();
-  console.log(chalk.yellow("Org Name:\t" + answer.azdo_org_name));
-  console.log(chalk.yellow("Project Name:\t" + answer.azdo_project_name));
-  const azureDevOpsPath = "https://dev.azure.com/" + answer.azdo_org_name + "/" + answer.azdo_project_name;
-  console.log(chalk.yellow(azureDevOpsPath));
-  // TODO: link the inputs
-
-  const userName = await azOps.getAuthUserName();
-  const firstName = userName.split(" ")[0];
-  console.log(userName);
+  // comment out the liner below if you already have spk config.yaml setup
+  await askQuestions();
+  const user = await userInfo();
 
   logger.info(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`);
-  if (fs.existsSync(WORKSPACE_DIR)) {
-    removeDir(WORKSPACE_DIR);
-  }
-  createDirectory(WORKSPACE_DIR);
+  createDirectory(WORKSPACE_DIR, true);
+
   await installPromiseSpinner("manifest repo", scaffoldManifestRepo());
   await installPromiseSpinner("hld repo", scaffoldHLDRepo());
   await installPromiseSpinner("hld -> repo pipeline", createHLDtoManifestPipeline(manifestUrl, hldUrl));
 
-  const pipelineUrl= `${azureDevOpsPath}/_build`;
-  const installAppRepo = await askToInstallAppRepo(firstName);
+  const pipelineUrl= `${getDevOpsPath()}/_build`;
+  const installAppRepo = await askToInstallAppRepo(user.firstName);
 
   if (installAppRepo){
     // TODO: Install here
   }
 
-  const goToPipelines = await askToSeePipelines(firstName);
+  const goToPipelines = await askToSeePipelines(user.firstName);
   if (goToPipelines) {
     open(pipelineUrl);
   }

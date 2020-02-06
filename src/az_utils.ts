@@ -10,6 +10,7 @@ import * as lim from "azure-devops-node-api/interfaces/LocationsInterfaces";
 import { GitRepository } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 import { logger } from "../../spk/src/logger";
 import * as constants from "./constant_values";
+import { getOrganizationUrl, getPersonalAccessToken, getProject } from "./SPKConfigBuilder";
 
 interface IAPIResult {
   api: vsoNodeApi.WebApi;
@@ -17,9 +18,9 @@ interface IAPIResult {
 }
 
 const getApi = async (): Promise<IAPIResult> => {
-  const authHandler = vsoNodeApi.getPersonalAccessTokenHandler(constants.ACCESS_TOKEN);
+  const authHandler = vsoNodeApi.getPersonalAccessTokenHandler(getPersonalAccessToken());
   const option = undefined;
-  const vsts = new vsoNodeApi.WebApi(constants.AZDO_ORG_URL, authHandler, option);
+  const vsts = new vsoNodeApi.WebApi(getOrganizationUrl(), authHandler, option);
   const connData = await vsts.connect();
   return {
     api: vsts,
@@ -100,7 +101,7 @@ export const getPipelineByName = async (
   try {
     logger.info(`Finding pipeline ${pipelineName}`);
     const buildApi = await getBuildApi();
-    const defs = await buildApi.getDefinitions(constants.AZDO_PROJECT);
+    const defs = await buildApi.getDefinitions(getProject());
     return defs.find(d => d.name === pipelineName);
   } catch (e) {
     logger.error(e);
@@ -112,7 +113,7 @@ export const deletePipeline = async (pipelineName: string, id: number) => {
   try {
     logger.info(`Deleting pipeline ${pipelineName}`);
     const buildApi = await getBuildApi();
-    await buildApi.deleteDefinition(constants.AZDO_PROJECT, id);
+    await buildApi.deleteDefinition(getProject(), id);
   } catch (e) {
     logger.error(`Error in deleting pipeline ${pipelineName}`);
     throw e;
@@ -123,7 +124,7 @@ export const getPipelineBuild = async (pipelineName: string): Promise<Build> => 
   try {
     logger.info(`Getting queue ${pipelineName}`);
     const buildApi = await getBuildApi();
-    return await buildApi.getLatestBuild(constants.AZDO_PROJECT, pipelineName);
+    return await buildApi.getLatestBuild(getProject(), pipelineName);
   } catch (e) {
     logger.error(`Error in getting build ${pipelineName}`);
     throw e;
