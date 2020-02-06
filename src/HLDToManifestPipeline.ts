@@ -1,4 +1,8 @@
-import { Build } from "azure-devops-node-api/interfaces/BuildInterfaces";
+import {
+  Build,
+  BuildResult,
+  BuildStatus
+} from "azure-devops-node-api/interfaces/BuildInterfaces";
 import {
   ICommandOptions as IHldToManifestPipelineValues,
   installHldToManifestPipeline
@@ -21,45 +25,45 @@ const getBuildStatusString = (status: number | undefined) => {
   if (status === undefined) {
     return "Unknown";
   }
-  if (status === 0) {
+  if (status === BuildStatus.None) {
     return "None";
   }
-  if (status === 1) {
+  if (status === BuildStatus.InProgress) {
     return "In Progress";
   }
-  if (status === 2) {
+  if (status === BuildStatus.Completed) {
     return "Completed";
   }
-  if (status === 4) {
+  if (status === BuildStatus.Cancelling) {
     return "Cancelling";
   }
-  if (status === 8) {
+  if (status === BuildStatus.Postponed) {
     return "Postponed";
   }
-  if (status === 32) {
+  if (status === BuildStatus.NotStarted) {
     return "Not Started";
   }
 
   return "Unknown";
 };
 
-const getBuildResultString = (status: number | undefined) => {
-  if (status === undefined) {
+const getBuildResultString = (result: number | undefined) => {
+  if (result === undefined) {
     return "Unknown";
   }
-  if (status === 0) {
+  if (result === BuildResult.None) {
     return "None";
   }
-  if (status === 2) {
+  if (result === BuildResult.Succeeded) {
     return "Succeeded";
   }
-  if (status === 4) {
+  if (result === BuildResult.PartiallySucceeded) {
     return "Partially Succeeded";
   }
-  if (status === 8) {
+  if (result === BuildResult.Failed) {
     return "Failed";
   }
-  if (status === 32) {
+  if (result === BuildResult.Canceled) {
     return "canceled";
   }
 
@@ -67,12 +71,7 @@ const getBuildResultString = (status: number | undefined) => {
 };
 
 const pollForPipelineStatus = async (pipelineName: string) => {
-  const oPipeline = await azOps.getPipelineByName(
-    constants.AZDO_ORG_URL,
-    constants.ACCESS_TOKEN,
-    constants.AZDO_PROJECT,
-    pipelineName
-  );
+  const oPipeline = await azOps.getPipelineByName(pipelineName);
   if (!oPipeline) {
     throw new Error(`${pipelineName} is not found`);
   }
@@ -80,12 +79,7 @@ const pollForPipelineStatus = async (pipelineName: string) => {
   let build: Build;
   do {
     await sleep(15);
-
-    build = await azOps.getPipelineBuild(
-      constants.AZDO_ORG_URL,
-      constants.ACCESS_TOKEN,
-      constants.AZDO_PROJECT,
-      pipelineName);
+    build = await azOps.getPipelineBuild(pipelineName);
     logger.info(`Status build of ${pipelineName}: ${getBuildStatusString(build?.status)}`);
   } while (!build || build.result === 0);
 
@@ -100,20 +94,10 @@ export const createHLDtoManifestPipeline = async (
   const pipelineName = `${constants.HLD_REPO}-to-${constants.MANIFEST_REPO}`;
 
   try {
-    const pipeline = await azOps.getPipelineByName(
-      constants.AZDO_ORG_URL,
-      constants.ACCESS_TOKEN,
-      constants.AZDO_PROJECT,
-      pipelineName
-    );
+    const pipeline = await azOps.getPipelineByName(pipelineName);
     if (pipeline) {
       logger.info(`${pipelineName} is found, deleting it`);
-      await azOps.deletePipeline(
-        constants.AZDO_ORG_URL,
-        constants.ACCESS_TOKEN,
-        constants.AZDO_PROJECT,
-        pipelineName,
-        pipeline.id!);
+      await azOps.deletePipeline(pipelineName, pipeline.id!);
     }
     const vals: IHldToManifestPipelineValues = {
       buildScriptUrl: BUILD_SCRIPT_URL,

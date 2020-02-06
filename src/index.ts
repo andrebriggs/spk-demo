@@ -1,14 +1,10 @@
-
-import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
-import { GitRepository } from "azure-devops-node-api/interfaces/TfvcInterfaces";
-
 import chalk from "chalk";
 import child_process from "child_process";
 import clear from "clear";
 import cli from "clui";
 import fs from "fs-extra";
 import inquirer from "inquirer";
-
+import open from "open";
 import os from "os";
 import path from "path";
 import simplegit, { SimpleGit, StatusResult  } from "simple-git/promise";
@@ -22,8 +18,6 @@ import { logger } from "../../spk/src/logger";
 import * as azOps from "./az_utils";
 import * as constants from "./constant_values";
 import { createHLDtoManifestPipeline } from "./HLDToManifestPipeline";
-import open from "open";
-
 
 const spawn = child_process.spawn;
 const Spinner = cli.Spinner;
@@ -68,19 +62,15 @@ const installPromiseHelper = (
   });
 };
 
-const installSpinner = async (installSubject: string) => {
-  const spinner = new Spinner(`Installing ${installSubject}`);
-  return installHelper(
-    // 'yarn add -D prettier',
-    "sleep 5",
-    () => console.log(chalk.green(`Done installing ${installSubject}`)),
-    spinner
-  );
-};
-
-function isEmpty(str: string) {
-    return (!str || 0 === str.length);
-}
+// const installSpinner = async (installSubject: string) => {
+//   const spinner = new Spinner(`Installing ${installSubject}`);
+//   return installHelper(
+//     // 'yarn add -D prettier',
+//     "sleep 5",
+//     () => console.log(chalk.green(`Done installing ${installSubject}`)),
+//     spinner
+//   );
+// };
 
 const installPromiseSpinner = async (
   installSubject: string,
@@ -110,29 +100,29 @@ const installPromiseSpinner = async (
 
 const askToInstallAppRepo= (firstName: string) => {
   const questions = [{
-    name: 'is_app_repo',
-    type: 'list',
     choices: ['.Yes', '.No'],
-    message: `${firstName}, would you like use a sample application repository?`,
-    filter: function(val: string) {
-      return val === '.Yes' ? true : false
+    filter: (val: string) => {
+      return val === '.Yes';
     },
+    message: `${firstName}, would you like use a sample application repository?`,
+    name: 'is_app_repo',
+    type: 'list'
   }];
-  return inquirer.prompt(questions)
-}
+  return inquirer.prompt(questions);
+};
 
 const askToSeePipelines= (firstName: string) => {
   const questions = [{
-    name: 'go_to_pipelines',
-    type: 'list',
     choices: ['.Yes', '.No'],
-    message: `${firstName}, would you like see your GitOps pipelines?`,
-    filter: function(val: string) {
-      return val === '.Yes' ? true : false
+    filter: (val: string) => {
+      return val === ".Yes";
     },
+    message: `${firstName}, would you like see your GitOps pipelines?`,
+    name: 'go_to_pipelines',
+    type: 'list'
   }];
-  return inquirer.prompt(questions)
-}
+  return inquirer.prompt(questions);
+};
 
 // const requireLetterAndNumber = value => {
 //     if (/\w/.test(value) && /\d/.test(value)) {
@@ -191,10 +181,6 @@ export const pushBranch = async (branchName: string): Promise<void> => {
   }
 };
 
-// let manifestRepoFiles: string[] = ["README.md"];
-// let hldRepoFiles: string[] = ["README.md"];
-// let appRepoFiles: string[] = ["README.md"];
-
 const logCurrentDirectory = () => {
   logger.info(`Current directory: ${process.cwd()}`);
 };
@@ -213,21 +199,6 @@ const moveToAbsPath = (absPath: string) => {
 
 const homedir = os.homedir();
 const WORKSPACE_DIR = path.resolve(path.join(homedir, constants.WORKSPACE));
-
-const createRepoInAzureOrg = async (
-  azureOrgUrl: string,
-  accessToken: string,
-  repoName: string,
-  projectName: string
-): Promise<GitRepository> => {
-  const vstsCollectionLevel = await azOps.getWebApi(azureOrgUrl,accessToken); // org url
-  const gitApi = await vstsCollectionLevel.getGitApi();
-  const createOptions = {
-    name: repoName,
-    project: projectName
-  } as GitInterfaces.GitRepositoryCreateOptions;
-  return await gitApi.createRepository(createOptions, projectName);
-};
 
 const logGitInformation = (gitStatus: StatusResult) => {
   logger.info("Files in local Git:");
@@ -271,7 +242,6 @@ const scaffoldManifestRepo = async () => {
   // Set up Manifest Repo
   try {
     const currentRepo = constants.MANIFEST_REPO;
-    const azureOrgUrl = constants.AZDO_ORG_URL;
     const azureOrgName = constants.AZDO_ORG;
     const azureProjectName = constants.AZDO_PROJECT;
     const accessToken = constants.ACCESS_TOKEN;
@@ -280,12 +250,15 @@ const scaffoldManifestRepo = async () => {
     createDirectory(currentRepo);
     moveToRelativePath(currentRepo);
 
-    const gitRepo = await azOps.findRepoInAzureOrg(azureOrgUrl, accessToken, currentRepo);
+    const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
+    if (gitRepo === null) {
+      throw new Error(`${currentRepo} is not found`);
+    }
 
     if (gitRepo.id) {
-      await azOps.deleteRepoInAzureOrg(azureOrgUrl, accessToken, gitRepo, azureProjectName);
+      await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
     }
-    const resultRepo = await createRepoInAzureOrg(azureOrgUrl, accessToken, currentRepo, azureProjectName);
+    const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
     logger.info("Result repo: " + resultRepo.remoteUrl);
     manifestUrl = resultRepo.remoteUrl!.replace(`${constants.AZDO_ORG}@`, "");
 
@@ -311,7 +284,6 @@ const scaffoldHLDRepo = async () => {
   // Set up HLD Repo
   try {
     const currentRepo = constants.HLD_REPO;
-    const azureOrgUrl = constants.AZDO_ORG_URL;
     const azureOrgName = constants.AZDO_ORG;
     const azureProjectName = constants.AZDO_PROJECT;
     const accessToken = constants.ACCESS_TOKEN;
@@ -320,13 +292,16 @@ const scaffoldHLDRepo = async () => {
     createDirectory(currentRepo);
     moveToRelativePath(currentRepo);
 
-    const gitRepo = await azOps.findRepoInAzureOrg(azureOrgUrl, accessToken, currentRepo);
-
-    if (gitRepo.id) {
-      await azOps.deleteRepoInAzureOrg(azureOrgUrl, accessToken, gitRepo, azureProjectName);
+    const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
+    if (gitRepo === null) {
+      throw new Error(`${currentRepo} is not found`);
     }
 
-    const resultRepo = await createRepoInAzureOrg(azureOrgUrl, accessToken, currentRepo, azureProjectName);
+    if (gitRepo.id) {
+      await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
+    }
+
+    const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
     logger.info("Result repo: " + resultRepo.remoteUrl);
     hldUrl = resultRepo.remoteUrl!.replace(`${constants.AZDO_ORG}@`, "");
 
@@ -349,7 +324,6 @@ const scaffoldHLDRepo = async () => {
   }
 };
 
-
 (async () => {
   // Silent the SPK logger for CLI and File outputs
   logger.transports.forEach((t) => (t.silent = true));
@@ -365,8 +339,9 @@ const scaffoldHLDRepo = async () => {
   console.log(chalk.yellow(azureDevOpsPath));
   // TODO: link the inputs
 
-  var userName = await azOps.getAuthUserName(constants.AZDO_ORG_URL,constants.ACCESS_TOKEN);
-  const firstName = userName.split(" ")[0]
+  const userName = await azOps.getAuthUserName();
+  const firstName = userName.split(" ")[0];
+  console.log(userName);
 
   logger.info(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`);
   if (fs.existsSync(WORKSPACE_DIR)) {
@@ -377,18 +352,18 @@ const scaffoldHLDRepo = async () => {
   await installPromiseSpinner("hld repo", scaffoldHLDRepo());
   await installPromiseSpinner("hld -> repo pipeline", createHLDtoManifestPipeline(manifestUrl, hldUrl));
 
-  const pipelineUrl= `${azureDevOpsPath}/_build`
-  const installAppRepo =  await askToInstallAppRepo(firstName);
-  if(installAppRepo){
-      //TODO: Install here
+  const pipelineUrl= `${azureDevOpsPath}/_build`;
+  const installAppRepo = await askToInstallAppRepo(firstName);
+
+  if (installAppRepo){
+    // TODO: Install here
   }
- 
-  const goToPipelines =  await askToSeePipelines(firstName);
-  if(goToPipelines){
-    await open(pipelineUrl);
+
+  const goToPipelines = await askToSeePipelines(firstName);
+  if (goToPipelines) {
+    open(pipelineUrl);
   }
   console.log(chalk.bold.whiteBright(`\nGitOps pipelines at ${pipelineUrl}`));
-  
 
   // createDirectory(constants.APP_REPO)
 
