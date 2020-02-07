@@ -12,6 +12,7 @@ introspection:
     service_principal_id: @@SP_ID@@
     service_principal_secret: @@SP_SECRET@@
     subscription_id: @@SUBSCRIPTION_ID@@
+    tenant_id: @@TENANT_ID@@
 `;
 
 export const build = (conf: IConfigYaml) => {
@@ -21,6 +22,7 @@ export const build = (conf: IConfigYaml) => {
     '@@PROJECT@@', conf.azure_devops?.project!).replace(
     '@@SP_ID@@', conf.introspection?.azure?.service_principal_id!).replace(
     '@@SP_SECRET@@', conf.introspection?.azure?.service_principal_secret!).replace(
+    '@@TENANT_ID@@', conf.introspection?.azure?.tenant_id!).replace(
     '@@SUBSCRIPTION_ID@@', conf.introspection?.azure?.subscription_id!);
 
   const targetFile = path.join(defaultConfigDir(), "config.yaml");
@@ -37,6 +39,22 @@ export const getOrganizationName = (): string => {
 
 export const getPersonalAccessToken = (): string => {
   return Config().azure_devops?.access_token!;
+};
+
+export const getSubscriptionId = (): string => {
+  return Config().introspection?.azure?.subscription_id!;
+};
+
+export const getTenantId = (): string => {
+  return Config().introspection?.azure?.tenant_id!;
+};
+
+export const getServiceProviderId = (): string => {
+  return Config().introspection?.azure?.service_principal_id!;
+};
+
+export const getServiceProviderSecret = (): string => {
+  return Config().introspection?.azure?.service_principal_secret!;
 };
 
 export const getOrganizationUrl = (): string => {
