@@ -9,14 +9,17 @@ import os from "os";
 import path from "path";
 import simplegit, { SimpleGit, StatusResult  } from "simple-git/promise";
 import { initialize as projectInitialize} from "../../spk/src/commands/project/init";
+import { create as createVariableGroup} from "../../spk/src/commands/project/create-variable-group";
+import { ICommandOptions,ICommandValues, createService} from "../../spk/src/commands/service/create";
 import { initialize as hldInitialize} from "../../spk/src/commands/hld/init";
 import { removeDir } from "../../spk/src/lib/ioUtil";
 import { exec } from "../../spk/src/lib/shell";
+import { IAzureDevOpsOpts } from "../../spk/src/lib/git";
 
 import { logger } from "../../spk/src/logger";
 import * as azOps from "./az_utils";
 import * as constants from "./constant_values";
-import { createHLDtoManifestPipeline } from "./HLDToManifestPipeline";
+import { createHLDtoManifestPipeline,createLifecyclePipeline } from "./HLDToManifestPipeline";
 import { ask as askQuestions, userInfo } from "./prompts";
 import {
   getDevOpsPath,
@@ -294,7 +297,6 @@ const scaffoldAppRepo = async () => {
 
         const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
         logger.info("Result repo: " + resultRepo.remoteUrl);
-        // appUrl = resultRepo.remoteUrl!.replace(`${azureOrgName}@`, "");
 
         logCurrentDirectory();
         const git = simplegit();
@@ -309,6 +311,47 @@ const scaffoldAppRepo = async () => {
         logGitInformation(await git.status());
         await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
 
+        const accessOpts: IAzureDevOpsOpts = {
+            orgName: azureOrgName,
+            personalAccessToken: accessToken,
+            project: azureProjectName
+          };
+
+        const variableGroupName = "quick-start-vg"
+        const resultVariableGroup = await createVariableGroup(variableGroupName,undefined,hldUrl,undefined,undefined,undefined,accessOpts);
+
+        //TODO make sure result is not undefined
+
+        const commandOpts: ICommandValues = {
+            displayName: currentRepo,
+            gitPush: false,
+            helmChartChart: "",
+            helmChartRepository: "",
+            helmConfigBranch: "",
+            helmConfigGit: "",
+            helmConfigPath: "",
+            k8sBackend: "",
+            maintainerEmail: "",
+            maintainerName: "",
+            middlewares: "",
+            packagesDir: "",
+            pathPrefix: "",
+            pathPrefixMajorVersion: "",
+            k8sBackendPort: "",
+            k8sPort: 0,
+            middlewaresArray: [],
+            ringNames: [],
+            variableGroups: []
+          }
+
+        await createService(".",currentRepo,commandOpts);
+
+        // Create and add files
+        await hldInitialize(".", false);
+        await git.add("./*");
+        logGitInformation(await git.status());
+
+        await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
     } catch (err) {
     // TODO err displays access token
     logger.error(`An error occured: ${err}`);
@@ -340,6 +383,7 @@ const scaffoldAppRepo = async () => {
   if (installAppRepo.is_app_repo){
     // TODO: Install here
     await installPromiseSpinner("app repo", scaffoldAppRepo());
+    await installPromiseSpinner("app lifecycle pipeline", createLifecyclePipeline());
   }
 
   const goToPipelines = await askToSeePipelines(user.firstName);
