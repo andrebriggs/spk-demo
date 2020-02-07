@@ -8,14 +8,13 @@ import open from "open";
 import os from "os";
 import path from "path";
 import simplegit, { SimpleGit, StatusResult  } from "simple-git/promise";
-import { initialize as projectInitialize} from "../../spk/src/commands/project/init";
-import { create as createVariableGroup} from "../../spk/src/commands/project/create-variable-group";
-import { ICommandOptions,ICommandValues, createService} from "../../spk/src/commands/service/create";
 import { initialize as hldInitialize} from "../../spk/src/commands/hld/init";
+import { create as createVariableGroup} from "../../spk/src/commands/project/create-variable-group";
+import { initialize as projectInitialize} from "../../spk/src/commands/project/init";
+import { createService, ICommandValues } from "../../spk/src/commands/service/create";
+import { IAzureDevOpsOpts } from "../../spk/src/lib/git";
 import { removeDir } from "../../spk/src/lib/ioUtil";
 import { exec } from "../../spk/src/lib/shell";
-import { IAzureDevOpsOpts } from "../../spk/src/lib/git";
-
 import { logger } from "../../spk/src/logger";
 import * as azOps from "./az_utils";
 import * as constants from "./constant_values";
@@ -280,82 +279,82 @@ const scaffoldHLDRepo = async () => {
 };
 
 const scaffoldAppRepo = async () => {
-    try{
-        const currentRepo = constants.APP_REPO;
-        const azureOrgName = getOrganizationName();
-        const azureProjectName = getProject();
-        const accessToken = getPersonalAccessToken();
+  try {
+    const currentRepo = constants.APP_REPO;
+    const azureOrgName = getOrganizationName();
+    const azureProjectName = getProject();
+    const accessToken = getPersonalAccessToken();
 
-        moveToAbsPath(WORKSPACE_DIR);
-        createDirectory(currentRepo);
-        moveToRelativePath(currentRepo);
+    moveToAbsPath(WORKSPACE_DIR);
+    createDirectory(currentRepo);
+    moveToRelativePath(currentRepo);
 
-        const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
-        if (gitRepo && gitRepo.id) {
-            await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
-        }
+    const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
+    if (gitRepo && gitRepo.id) {
+      await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
+    }
 
-        const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
-        logger.info("Result repo: " + resultRepo.remoteUrl);
+    const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
+    logger.info("Result repo: " + resultRepo.remoteUrl);
 
-        logCurrentDirectory();
-        const git = simplegit();
-        if (!await git.checkIsRepo()) {
-        await git.init();
-        logger.info(`Git init called in ${process.cwd()}`);
-        }
+    logCurrentDirectory();
+    const git = simplegit();
+    if (!await git.checkIsRepo()) {
+      await git.init();
+      logger.info(`Git init called in ${process.cwd()}`);
+    }
 
-        // Create and add files
-        await projectInitialize(".")
-        await git.add("./*");
-        logGitInformation(await git.status());
-        await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
+    // Create and add files
+    await projectInitialize(".");
+    await git.add("./*");
+    logGitInformation(await git.status());
+    await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
 
-        const accessOpts: IAzureDevOpsOpts = {
-            orgName: azureOrgName,
-            personalAccessToken: accessToken,
-            project: azureProjectName
-          };
+    const accessOpts: IAzureDevOpsOpts = {
+      orgName: azureOrgName,
+      personalAccessToken: accessToken,
+      project: azureProjectName
+    };
 
-        const variableGroupName = "quick-start-vg"
-        const resultVariableGroup = await createVariableGroup(variableGroupName,undefined,hldUrl,undefined,undefined,undefined,accessOpts);
+    const variableGroupName = "quick-start-vg";
+    const resultVariableGroup = await createVariableGroup(variableGroupName, undefined, hldUrl, undefined, undefined, undefined, accessOpts);
 
-        //TODO make sure result is not undefined
+    // TODO make sure result is not undefined
 
-        const commandOpts: ICommandValues = {
-            displayName: currentRepo,
-            gitPush: false,
-            helmChartChart: "",
-            helmChartRepository: "",
-            helmConfigBranch: "",
-            helmConfigGit: "",
-            helmConfigPath: "",
-            k8sBackend: "",
-            maintainerEmail: "",
-            maintainerName: "",
-            middlewares: "",
-            packagesDir: "",
-            pathPrefix: "",
-            pathPrefixMajorVersion: "",
-            k8sBackendPort: "",
-            k8sPort: 0,
-            middlewaresArray: [],
-            ringNames: [],
-            variableGroups: []
-          }
+    const commandOpts: ICommandValues = {
+      displayName: currentRepo,
+      gitPush: false,
+      helmChartChart: "",
+      helmChartRepository: "",
+      helmConfigBranch: "",
+      helmConfigGit: "",
+      helmConfigPath: "",
+      k8sBackend: "",
+      k8sBackendPort: "",
+      k8sPort: 0,
+      maintainerEmail: "",
+      maintainerName: "",
+      middlewares: "",
+      middlewaresArray: [],
+      packagesDir: "",
+      pathPrefix: "",
+      pathPrefixMajorVersion: "",
+      ringNames: [],
+      variableGroups: []
+    };
 
-        await createService(".",currentRepo,commandOpts);
+    await createService(".", currentRepo, commandOpts);
 
-        // Create and add files
-        await hldInitialize(".", false);
-        await git.add("./*");
-        logGitInformation(await git.status());
+    // Create and add files
+    await hldInitialize(".", false);
+    await git.add("./*");
+    logGitInformation(await git.status());
 
-        await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
-    } catch (err) {
+    await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
+  } catch (err) {
     // TODO err displays access token
     logger.error(`An error occured: ${err}`);
-    }
+  }
 };
 
 (async () => {

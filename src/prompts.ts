@@ -58,6 +58,51 @@ const askOrganization = async (): Promise<{[x: string]: {} }> => {
       }
       return true;
     }
+  }, {
+    message: 'Enter {Subscription ID}\n',
+    name: 'az_subscription_id',
+    type: 'input',
+    validate: (value: string) => {
+      if (!hasValue(value)) {
+        return "Must enter a Subscription ID";
+      }
+
+      const pass = value.match(
+        /^\S*$/ // No Spaces
+      );
+      if (pass) {
+        return true;
+      }
+      return 'Subscription ID name cannot have any spaces';
+    }
+  }, {
+    message: 'Enter {Service Principal ID}\n',
+    name: 'az_service_principal_id',
+    type: 'input',
+    validate: (value: string) => {
+      if (!hasValue(value)) {
+        return "Must enter a Service Principal ID";
+      }
+
+      const pass = value.match(
+        /^\S*$/ // No Spaces
+      );
+      if (pass) {
+        return true;
+      }
+      return 'Service Principal ID name cannot have any spaces';
+    }
+  }, {
+    mask: '*',
+    message: 'Enter Service Principal Secret',
+    name: 'az_service_principal_secret',
+    type: 'password',
+    validate: (value: string) => {
+      if (!hasValue(value)) {
+        return 'Must enter a service principal secret';
+      }
+      return true;
+    }
   }];
 
   return inquirer.prompt(questions);
@@ -73,6 +118,14 @@ export const ask = async () => {
       access_token: answer.azdo_pat as string,
       org: answer.azdo_org_name as string,
       project: answer.azdo_project_name as string
+    },
+    introspection: {
+      azure: {
+        key: Promise.resolve(undefined),
+        service_principal_id: answer.az_service_principal_id as string,
+        service_principal_secret: answer.az_service_principal_secret as string,
+        subscription_id: answer.az_subscription_id as string
+      }
     }
   });
 };
