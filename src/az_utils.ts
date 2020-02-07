@@ -61,7 +61,7 @@ export const createRepoInAzureOrg = async (
 
 export const findRepoInAzureOrg = async (
   repoName: string
-): Promise<GitRepository | null> => {
+): Promise<GitRepository | undefined> => {
   const gitApi = await getGitApi();
   const respositories = await gitApi.getRepositories();
 
@@ -75,7 +75,7 @@ export const findRepoInAzureOrg = async (
   }
 
   logger.info("Found no repos...");
-  return null;
+  return undefined;
 };
 
 export const deleteRepoInAzureOrg = async (

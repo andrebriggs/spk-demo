@@ -8,7 +8,7 @@ import open from "open";
 import os from "os";
 import path from "path";
 import simplegit, { SimpleGit, StatusResult  } from "simple-git/promise";
-
+import { initialize as projectInitialize} from "../../spk/src/commands/project/init";
 import { initialize as hldInitialize} from "../../spk/src/commands/hld/init";
 import { removeDir } from "../../spk/src/lib/ioUtil";
 import { exec } from "../../spk/src/lib/shell";
@@ -84,9 +84,8 @@ const installPromiseSpinner = async (
 ) => {
   const spinner = new Spinner(`Installing ${installSubject}`);
   return installPromiseHelper(
-    // 'yarn add -D prettier',
     delegate,
-    () => console.log(chalk.green("Done installing "+installSubject)),
+    () => console.log(chalk.green(`Done installing ${installSubject} 👍`)),
     spinner
   );
 };
@@ -129,7 +128,6 @@ const askToSeePipelines= (firstName: string) => {
   }];
   return inquirer.prompt(questions);
 };
-
 
 export const pushBranch = async (branchName: string): Promise<void> => {
   try {
@@ -212,13 +210,10 @@ const scaffoldManifestRepo = async () => {
     moveToRelativePath(currentRepo);
 
     const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
-    if (gitRepo === null) {
-      throw new Error(`${currentRepo} is not found`);
+    if (gitRepo && gitRepo.id) {
+        await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
     }
 
-    if (gitRepo.id) {
-      await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
-    }
     const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
     logger.info("Result repo: " + resultRepo.remoteUrl);
     manifestUrl = resultRepo.remoteUrl!.replace(`${getOrganizationName()}@`, "");
@@ -254,18 +249,14 @@ const scaffoldHLDRepo = async () => {
     moveToRelativePath(currentRepo);
 
     const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
-    if (gitRepo === null) {
-      throw new Error(`${currentRepo} is not found`);
-    }
-
-    if (gitRepo.id) {
-      await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
+    if (gitRepo && gitRepo.id) {
+        await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
     }
 
     const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
     logger.info("Result repo: " + resultRepo.remoteUrl);
     hldUrl = resultRepo.remoteUrl!.replace(`${getOrganizationName()}@`, "");
-
+    // console.log("HLD URL: "+hldUrl)
     logCurrentDirectory();
     const git = simplegit();
     if (!await git.checkIsRepo()) {
@@ -283,6 +274,45 @@ const scaffoldHLDRepo = async () => {
     // TODO err displays access token
     logger.error(`An error occured: ${err}`);
   }
+};
+
+const scaffoldAppRepo = async () => {
+    try{
+        const currentRepo = constants.APP_REPO;
+        const azureOrgName = getOrganizationName();
+        const azureProjectName = getProject();
+        const accessToken = getPersonalAccessToken();
+
+        moveToAbsPath(WORKSPACE_DIR);
+        createDirectory(currentRepo);
+        moveToRelativePath(currentRepo);
+
+        const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
+        if (gitRepo && gitRepo.id) {
+            await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
+        }
+
+        const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
+        logger.info("Result repo: " + resultRepo.remoteUrl);
+        // appUrl = resultRepo.remoteUrl!.replace(`${azureOrgName}@`, "");
+
+        logCurrentDirectory();
+        const git = simplegit();
+        if (!await git.checkIsRepo()) {
+        await git.init();
+        logger.info(`Git init called in ${process.cwd()}`);
+        }
+
+        // Create and add files
+        await projectInitialize(".")
+        await git.add("./*");
+        logGitInformation(await git.status());
+        await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
+
+    } catch (err) {
+    // TODO err displays access token
+    logger.error(`An error occured: ${err}`);
+    }
 };
 
 (async () => {
@@ -307,12 +337,13 @@ const scaffoldHLDRepo = async () => {
   const pipelineUrl= `${getDevOpsPath()}/_build`;
   const installAppRepo = await askToInstallAppRepo(user.firstName);
 
-  if (installAppRepo){
+  if (installAppRepo.is_app_repo){
     // TODO: Install here
+    await installPromiseSpinner("app repo", scaffoldAppRepo());
   }
 
   const goToPipelines = await askToSeePipelines(user.firstName);
-  if (goToPipelines) {
+  if (goToPipelines.go_to_pipelines) {
     open(pipelineUrl);
   }
   console.log(chalk.bold.whiteBright(`\nGitOps pipelines at ${pipelineUrl}`));
