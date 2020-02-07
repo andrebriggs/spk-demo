@@ -9,7 +9,7 @@ import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
 import * as lim from "azure-devops-node-api/interfaces/LocationsInterfaces";
 import { GitRepository } from "azure-devops-node-api/interfaces/TfvcInterfaces";
 import { logger } from "../../spk/src/logger";
-import * as constants from "./constant_values";
+import * as constants from "./constant-values";
 import { getOrganizationUrl, getPersonalAccessToken, getProject } from "./SPKConfigBuilder";
 
 interface IAPIResult {

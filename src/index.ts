@@ -16,9 +16,9 @@ import { IAzureDevOpsOpts } from "../../spk/src/lib/git";
 import { removeDir } from "../../spk/src/lib/ioUtil";
 import { exec } from "../../spk/src/lib/shell";
 import { logger } from "../../spk/src/logger";
-import * as azOps from "./az_utils";
-import * as constants from "./constant_values";
-import { createHLDtoManifestPipeline,createLifecyclePipeline } from "./HLDToManifestPipeline";
+import * as azOps from "./az-utils";
+import * as constants from "./constant-values";
+import { createHLDtoManifestPipeline,createLifecyclePipeline } from "./pipeline-management";
 import { ask as askQuestions, userInfo } from "./prompts";
 import {
   getDevOpsPath,

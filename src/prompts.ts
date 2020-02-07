@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import inquirer from "inquirer";
 import { hasValue } from "../../spk/src/lib/validator";
-import { getAuthUserName } from "./az_utils";
+import { getAuthUserName } from "./az-utils";
 import { build as buildSPKConfigYaml } from "./SPKConfigBuilder";
 
 export interface IAnswers {

@@ -11,8 +11,8 @@ import {ICommandOptions, installLifecyclePipeline} from "../../spk/src/commands/
 import { BUILD_SCRIPT_URL } from "../../spk/src/lib/constants";
 import { getRepositoryName } from "../../spk/src/lib/gitutils";
 import { logger } from "../../spk/src/logger";
-import * as azOps from "./az_utils";
-import * as constants from "./constant_values";
+import * as azOps from "./az-utils";
+import * as constants from "./constant-values";
 import {
   getOrganizationName,
   getPersonalAccessToken,
@@ -76,7 +76,7 @@ const getBuildResultString = (result: number | undefined) => {
   return "Unknown";
 };
 
-const pollForPipelineStatus = async (pipelineName: string) => {
+export const pollForPipelineStatus = async (pipelineName: string) => {
   const oPipeline = await azOps.getPipelineByName(pipelineName);
   if (!oPipeline) {
     throw new Error(`${pipelineName} is not found`);
