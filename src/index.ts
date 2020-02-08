@@ -92,19 +92,6 @@ const installPromiseSpinner = async (
   );
 };
 
-// const askIfJsorTs = () => {
-//   const questions = [{
-//     name: 'ENV',
-//     type: 'list',
-//     choices: ['.Typescript', '.Javascript'],
-//     message: 'Please, select if this is a JavaScript or Typescript project',
-//     filter: function(val: string) {
-//       return val === '.Typescript' ? 'ts' : 'js'
-//     },
-//   }];
-//   return inquirer.prompt(questions)
-// }
-
 const askToInstallAppRepo= (firstName: string) => {
   const questions = [{
     choices: ['.Yes', '.No'],
@@ -330,7 +317,7 @@ const scaffoldAppRepo = async () => {
       helmConfigGit: "",
       helmConfigPath: "",
       k8sBackend: "",
-      k8sBackendPort: "",
+      k8sBackendPort: "80",
       k8sPort: 0,
       maintainerEmail: "",
       maintainerName: "",
@@ -339,8 +326,8 @@ const scaffoldAppRepo = async () => {
       packagesDir: "",
       pathPrefix: "",
       pathPrefixMajorVersion: "",
-      ringNames: [],
-      variableGroups: []
+      ringNames: ["master"],
+      variableGroups: [variableGroupName]
     };
 
     await createService(".", currentRepo, commandOpts);
@@ -390,24 +377,6 @@ const scaffoldAppRepo = async () => {
     open(pipelineUrl);
   }
   console.log(chalk.bold.whiteBright(`\nGitOps pipelines at ${pipelineUrl}`));
-
-  // createDirectory(constants.APP_REPO)
-
-  // logCurrentDirectory()
-
-  // const answer = await askIfJsorTs()
-
-  // answer.then(answers => {
-  //     console.log("Org Name:\t"+answers.azdo_org_name);
-  //     console.log("Project Name:\t"+answers.azdo_project_name);
-  //     console.log("https://dev.azure.com/"+answers.azdo_org_name+"/"+answers.azdo_project_name)
-  // });
-
-  // console.log(chalk.yellow("You chose wisely 🧙‍♂️"))
-
-  // await installSpinner('Manifest repository')
-  // await installSpinner('HLD repository')
-  // await installSpinner('Application repository')
 })();
 
 

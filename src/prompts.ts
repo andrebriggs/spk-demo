@@ -59,23 +59,6 @@ const askOrganization = async (): Promise<{[x: string]: {} }> => {
       return true;
     }
   }, {
-    message: 'Enter {Subscription ID}\n',
-    name: 'az_subscription_id',
-    type: 'input',
-    validate: (value: string) => {
-      if (!hasValue(value)) {
-        return "Must enter a Subscription ID";
-      }
-
-      const pass = value.match(
-        /^\S*$/ // No Spaces
-      );
-      if (pass) {
-        return true;
-      }
-      return 'Subscription ID name cannot have any spaces';
-    }
-  }, {
     message: 'Enter {Tenant ID}\n',
     name: 'az_tenant_id',
     type: 'input',
@@ -141,7 +124,6 @@ export const ask = async () => {
         key: Promise.resolve(undefined),
         service_principal_id: answer.az_service_principal_id as string,
         service_principal_secret: answer.az_service_principal_secret as string,
-        subscription_id: answer.az_subscription_id as string,
         tenant_id: answer.az_tenant_id as string
       }
     }
