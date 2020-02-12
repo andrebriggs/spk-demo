@@ -108,6 +108,8 @@ const WORKSPACE_DIR = path.resolve(path.join(homedir, constants.WORKSPACE));
     await installPromiseSpinner("app repo", scaffoldAppRepo(WORKSPACE_DIR,acrName,hldUrl));
     await installPromiseSpinner("app lifecycle pipeline", createLifecyclePipeline());
     await installPromiseSpinner("app build pipeline", createBuildPipeline());
+
+    //Point users to pull requests and tell them to approve
   }
 
   const goToPipelines = await askToSeePipelines(user.firstName);
