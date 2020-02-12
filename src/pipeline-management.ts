@@ -8,6 +8,7 @@ import {
   installHldToManifestPipeline
 } from "../../spk/src/commands/hld/pipeline";
 import {ICommandOptions, installLifecyclePipeline} from "../../spk/src/commands/Project/pipeline";
+import {ICommandOptions as buildOpts, installBuildUpdatePipeline} from "../../spk/src/commands/service/pipeline";
 import { BUILD_SCRIPT_URL } from "../../spk/src/lib/constants";
 import { getRepositoryName } from "../../spk/src/lib/gitutils";
 import { logger } from "../../spk/src/logger";
@@ -149,6 +150,37 @@ export const createLifecyclePipeline = async () => {
     await pollForPipelineStatus(pipelineName);
   } catch (err) {
     logger.error(`An error occured in create HLD to Manifest Pipeline`);
+    throw err;
+  }
+};
+
+export const createBuildPipeline = async () => {
+  const pipelineName = constants.APP_REPO_BUILD;
+
+  try {
+    const pipeline = await azOps.getPipelineByName(pipelineName);
+    if (pipeline) {
+      logger.info(`${pipelineName} is found, deleting it`);
+      await azOps.deletePipeline(pipelineName, pipeline.id!);
+    }
+
+    // HACK
+    const appUrl = `https://dev.azure.com/${getOrganizationName()}/${getProject()}/_git/${constants.APP_REPO}`;
+
+    const vals: buildOpts = {
+      buildScriptUrl: BUILD_SCRIPT_URL,
+      devopsProject: getProject(),
+      orgName: getOrganizationName(),
+      packagesDir: undefined,
+      personalAccessToken: getPersonalAccessToken(),
+      pipelineName,
+      repoName: constants.APP_REPO,
+      repoUrl: appUrl
+    };
+    await installBuildUpdatePipeline(constants.APP_REPO,vals);
+    await pollForPipelineStatus(pipelineName);
+  } catch (err) {
+    logger.error(`An error occured in create ${pipelineName} Pipeline`);
     throw err;
   }
 };

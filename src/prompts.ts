@@ -59,24 +59,7 @@ const askOrganization = async (): Promise<{[x: string]: {} }> => {
       return true;
     }
   }, {
-    message: 'Enter {Tenant ID}\n',
-    name: 'az_tenant_id',
-    type: 'input',
-    validate: (value: string) => {
-      if (!hasValue(value)) {
-        return "Must enter a Tenant ID";
-      }
-
-      const pass = value.match(
-        /^\S*$/ // No Spaces
-      );
-      if (pass) {
-        return true;
-      }
-      return 'Tenant ID name cannot have any spaces';
-    }
-  }, {
-    message: 'Enter {Service Principal ID}\n',
+    message: 'Enter Service Principal ID\n',
     name: 'az_service_principal_id',
     type: 'input',
     validate: (value: string) => {
@@ -103,8 +86,60 @@ const askOrganization = async (): Promise<{[x: string]: {} }> => {
       }
       return true;
     }
+  }, {
+    message: 'Enter Tenant ID\n',
+    name: 'az_tenant_id',
+    type: 'input',
+    validate: (value: string) => {
+      if (!hasValue(value)) {
+        return "Must enter a Tenant ID";
+      }
+
+      const pass = value.match(
+        /^\S*$/ // No Spaces
+      );
+      if (pass) {
+        return true;
+      }
+      return 'Tenant ID name cannot have any spaces';
+    }
   }];
 
+  return inquirer.prompt(questions);
+};
+
+export const askContainerRegistry = async (): Promise<{[x: string]: {} }> => {
+  const question = [{
+    message: 'We need the ACR NAME associated with your service principal (e.g. ACR-NAME in ACR-NAME.azurecr.io)\n',
+    name: 'az_acr_name',
+    type: 'input',
+    validate: (value: string) => {
+      if (!hasValue(value)) {
+        return "Must enter an ACR NAME";
+      }
+
+      const pass = value.match(
+        /^\S*$/ // No Spaces
+      );
+      if (pass) {
+        return true;
+      }
+      return 'ACR NAME name cannot have any spaces';
+    }
+  }];
+  return inquirer.prompt(question);
+}
+
+export const askToInstallAppRepo= (firstName: string) => {
+  const questions = [{
+    choices: ['.Yes', '.No'],
+    filter: (val: string) => {
+      return val === '.Yes';
+    },
+    message: `${firstName}, would you like use a sample application repository?`,
+    name: 'is_app_repo',
+    type: 'list'
+  }];
   return inquirer.prompt(questions);
 };
 

@@ -2,57 +2,30 @@ import chalk from "chalk";
 import child_process from "child_process";
 import clear from "clear";
 import cli from "clui";
-import fs from "fs-extra";
 import inquirer from "inquirer";
 import open from "open";
 import os from "os";
 import path from "path";
-import simplegit, { SimpleGit, StatusResult  } from "simple-git/promise";
-import { initialize as hldInitialize} from "../../spk/src/commands/hld/init";
-import { create as createVariableGroup} from "../../spk/src/commands/project/create-variable-group";
-import { initialize as projectInitialize} from "../../spk/src/commands/project/init";
-import { createService, ICommandValues } from "../../spk/src/commands/service/create";
-import { IAzureDevOpsOpts } from "../../spk/src/lib/git";
-import { removeDir } from "../../spk/src/lib/ioUtil";
+import {scaffoldManifestRepo,scaffoldHelmRepo,scaffoldHLDRepo,scaffoldAppRepo} from "./scaffolding";
+import {createDirectory} from "./fs-utils";
+import {getAzureRepoUrl} from "./az-utils";
 import { exec } from "../../spk/src/lib/shell";
 import { logger } from "../../spk/src/logger";
-import * as azOps from "./az-utils";
 import * as constants from "./constant-values";
-import { createHLDtoManifestPipeline,createLifecyclePipeline } from "./pipeline-management";
-import { ask as askQuestions, userInfo } from "./prompts";
-import {
-  getDevOpsPath,
-  getOrganizationName,
-  getPersonalAccessToken,
-  getProject
-} from "./SPKConfigBuilder";
+import { createBuildPipeline,createHLDtoManifestPipeline,createLifecyclePipeline } from "./pipeline-management";
+import { askContainerRegistry, askToInstallAppRepo, ask as askQuestions, userInfo } from "./prompts";
+import { getDevOpsPath } from "./SPKConfigBuilder";
 
 const spawn = child_process.spawn;
 const Spinner = cli.Spinner;
-let hldUrl: string = "";
-let manifestUrl: string = "";
+const hldUrl = getAzureRepoUrl(constants.HLD_REPO)
+const manifestUrl = getAzureRepoUrl(constants.MANIFEST_REPO)
 
 const init = async () => {
   clear();
   console.log(
     chalk.bold.whiteBright("Welcome SPK Quick Start!")
   );
-};
-
-const installHelper = (
-  command: string,
-  onSuccess: { (): void; (): void },
-  spinner: cli.Spinner
-) => {
-  return new Promise((resolve, reject) => {
-    const process = spawn(command, { shell: true });
-    spinner.start();
-    process.on('exit', () => {
-      spinner.stop();
-      onSuccess();
-      resolve();
-    });
-  });
 };
 
 const installPromiseHelper = (
@@ -70,16 +43,6 @@ const installPromiseHelper = (
   });
 };
 
-// const installSpinner = async (installSubject: string) => {
-//   const spinner = new Spinner(`Installing ${installSubject}`);
-//   return installHelper(
-//     // 'yarn add -D prettier',
-//     "sleep 5",
-//     () => console.log(chalk.green(`Done installing ${installSubject}`)),
-//     spinner
-//   );
-// };
-
 const installPromiseSpinner = async (
   installSubject: string,
   delegate: Promise<void>
@@ -90,19 +53,6 @@ const installPromiseSpinner = async (
     () => console.log(chalk.green(`Done installing ${installSubject} 👍`)),
     spinner
   );
-};
-
-const askToInstallAppRepo= (firstName: string) => {
-  const questions = [{
-    choices: ['.Yes', '.No'],
-    filter: (val: string) => {
-      return val === '.Yes';
-    },
-    message: `${firstName}, would you like use a sample application repository?`,
-    name: 'is_app_repo',
-    type: 'list'
-  }];
-  return inquirer.prompt(questions);
 };
 
 const askToSeePipelines= (firstName: string) => {
@@ -125,224 +75,8 @@ export const pushBranch = async (branchName: string): Promise<void> => {
     throw Error(`Unable to push git branch ${branchName}: ` + err);
   }
 };
-
-const logCurrentDirectory = () => {
-  logger.info(`Current directory: ${process.cwd()}`);
-};
-
-const createDirectory = (dirName: string, removeIfExist = false) => {
-  if (removeIfExist && fs.existsSync(dirName)) {
-    removeDir(dirName);
-  }
-  fs.mkdirpSync(dirName);
-};
-
-const moveToRelativePath = (relativePath: string) => {
-  process.chdir(relativePath);
-};
-
-const moveToAbsPath = (absPath: string) => {
-  process.chdir(absPath);
-};
-
 const homedir = os.homedir();
 const WORKSPACE_DIR = path.resolve(path.join(homedir, constants.WORKSPACE));
-
-const logGitInformation = (gitStatus: StatusResult) => {
-  logger.info("Files in local Git:");
-  gitStatus.files.forEach(f => logger.info("\t" + f.path));
-
-  logger.info("Files added to Git:");
-  gitStatus.created.forEach(f => logger.info("\t" + f));
-
-  logger.info(chalk.yellow("Files not added to Git:"));
-  gitStatus.not_added.forEach(f => logger.info("\t" + f));
-};
-
-const commitAndPushToRemote = async (
-  git: SimpleGit,
-  azureOrgName: string,
-  azureProjectName: string,
-  accessToken: string,
-  repoName: string
-) => {
-  // Commit and check the local git log
-  await git.commit(`Initial commit for ${repoName} repo`);
-
-  const resultLog = await git.log();
-  logger.info("Log Messages from Git:");
-  resultLog.all.forEach(f => logger.info("\t" + f.date + " --> " + f.message));
-
-  // TOFIX: We know AzDO url style so hack it for now instead of discovering via API
-  const remoteURL =
-    `dev.azure.com/${azureOrgName}/${azureProjectName}/_git/${repoName}`;
-
-  const remote = `https://${constants.USER}:${accessToken}@${remoteURL}`;
-
-  // Push to remote
-  await git.addRemote('origin', remote);
-  await git.push('origin', 'master');
-
-  logger.info(`Finished pushing ${repoName} repo!`);
-};
-
-const scaffoldManifestRepo = async () => {
-  // Set up Manifest Repo
-  try {
-    const currentRepo = constants.MANIFEST_REPO;
-    const azureOrgName = getOrganizationName();
-    const azureProjectName = getProject();
-    const accessToken = getPersonalAccessToken();
-
-    moveToAbsPath(WORKSPACE_DIR);
-    createDirectory(currentRepo);
-    moveToRelativePath(currentRepo);
-
-    const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
-    if (gitRepo && gitRepo.id) {
-        await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
-    }
-
-    const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
-    logger.info("Result repo: " + resultRepo.remoteUrl);
-    manifestUrl = resultRepo.remoteUrl!.replace(`${getOrganizationName()}@`, "");
-
-    logCurrentDirectory();
-    const git = simplegit();
-    if (!await git.checkIsRepo()) {
-      await git.init();
-      logger.info(`Git init called in ${process.cwd()}`);
-    }
-
-    // Create and add files
-    fs.createFileSync("README.md");
-    await git.add("./README.md");
-
-    await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
-  } catch (err) {
-    // TODO err displays access token
-    logger.error(`An error occured: ${err}`);
-  }
-};
-
-const scaffoldHLDRepo = async () => {
-  // Set up HLD Repo
-  try {
-    const currentRepo = constants.HLD_REPO;
-    const azureOrgName = getOrganizationName();
-    const azureProjectName = getProject();
-    const accessToken = getPersonalAccessToken();
-
-    moveToAbsPath(WORKSPACE_DIR);
-    createDirectory(currentRepo);
-    moveToRelativePath(currentRepo);
-
-    const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
-    if (gitRepo && gitRepo.id) {
-        await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
-    }
-
-    const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
-    logger.info("Result repo: " + resultRepo.remoteUrl);
-    hldUrl = resultRepo.remoteUrl!.replace(`${getOrganizationName()}@`, "");
-    // console.log("HLD URL: "+hldUrl)
-    logCurrentDirectory();
-    const git = simplegit();
-    if (!await git.checkIsRepo()) {
-      await git.init();
-      logger.info(`Git init called in ${process.cwd()}`);
-    }
-
-    // Create and add files
-    await hldInitialize(".", false);
-    await git.add("./*");
-    logGitInformation(await git.status());
-
-    await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
-  } catch (err) {
-    // TODO err displays access token
-    logger.error(`An error occured: ${err}`);
-  }
-};
-
-const scaffoldAppRepo = async () => {
-  try {
-    const currentRepo = constants.APP_REPO;
-    const azureOrgName = getOrganizationName();
-    const azureProjectName = getProject();
-    const accessToken = getPersonalAccessToken();
-
-    moveToAbsPath(WORKSPACE_DIR);
-    createDirectory(currentRepo);
-    moveToRelativePath(currentRepo);
-
-    const gitRepo = await azOps.findRepoInAzureOrg(currentRepo);
-    if (gitRepo && gitRepo.id) {
-      await azOps.deleteRepoInAzureOrg(gitRepo, azureProjectName);
-    }
-
-    const resultRepo = await azOps.createRepoInAzureOrg(currentRepo, azureProjectName);
-    logger.info("Result repo: " + resultRepo.remoteUrl);
-
-    logCurrentDirectory();
-    const git = simplegit();
-    if (!await git.checkIsRepo()) {
-      await git.init();
-      logger.info(`Git init called in ${process.cwd()}`);
-    }
-
-    // Create and add files
-    await projectInitialize(".");
-    await git.add("./*");
-    logGitInformation(await git.status());
-    await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
-
-    const accessOpts: IAzureDevOpsOpts = {
-      orgName: azureOrgName,
-      personalAccessToken: accessToken,
-      project: azureProjectName
-    };
-
-    const variableGroupName = "quick-start-vg";
-    const resultVariableGroup = await createVariableGroup(variableGroupName, undefined, hldUrl, undefined, undefined, undefined, accessOpts);
-
-    // TODO make sure result is not undefined
-
-    const commandOpts: ICommandValues = {
-      displayName: currentRepo,
-      gitPush: false,
-      helmChartChart: "",
-      helmChartRepository: "",
-      helmConfigBranch: "",
-      helmConfigGit: "",
-      helmConfigPath: "",
-      k8sBackend: "",
-      k8sBackendPort: "80",
-      k8sPort: 0,
-      maintainerEmail: "",
-      maintainerName: "",
-      middlewares: "",
-      middlewaresArray: [],
-      packagesDir: "",
-      pathPrefix: "",
-      pathPrefixMajorVersion: "",
-      ringNames: ["master"],
-      variableGroups: [variableGroupName]
-    };
-
-    await createService(".", currentRepo, commandOpts);
-
-    // Create and add files
-    await hldInitialize(".", false);
-    await git.add("./*");
-    logGitInformation(await git.status());
-
-    await commitAndPushToRemote(git, azureOrgName, azureProjectName, accessToken, currentRepo);
-  } catch (err) {
-    // TODO err displays access token
-    logger.error(`An error occured: ${err}`);
-  }
-};
 
 (async () => {
   // Silent the SPK logger for CLI and File outputs
@@ -353,23 +87,27 @@ const scaffoldAppRepo = async () => {
 
   init();
   // comment out the liner below if you already have spk config.yaml setup
-  await askQuestions();
+  await askQuestions(); //TODO is config file exists with necessary fields, skip this
   const user = await userInfo();
 
   logger.info(`The WORKSPACE_DIR is ${WORKSPACE_DIR}`);
   createDirectory(WORKSPACE_DIR, true);
 
-  await installPromiseSpinner("manifest repo", scaffoldManifestRepo());
-  await installPromiseSpinner("hld repo", scaffoldHLDRepo());
-  await installPromiseSpinner("hld -> repo pipeline", createHLDtoManifestPipeline(manifestUrl, hldUrl));
+  await installPromiseSpinner("manifest repo", scaffoldManifestRepo(WORKSPACE_DIR));
+  await installPromiseSpinner("hld repo", scaffoldHLDRepo(WORKSPACE_DIR));
+  await installPromiseSpinner("hld -> manifest pipeline", createHLDtoManifestPipeline(manifestUrl, hldUrl));
 
   const pipelineUrl= `${getDevOpsPath()}/_build`;
   const installAppRepo = await askToInstallAppRepo(user.firstName);
 
   if (installAppRepo.is_app_repo){
-    // TODO: Install here
-    await installPromiseSpinner("app repo", scaffoldAppRepo());
+    const answer = await askContainerRegistry()
+    const acrName = answer.az_acr_name as string;
+
+    await installPromiseSpinner("helm repo", scaffoldHelmRepo(WORKSPACE_DIR,acrName));
+    await installPromiseSpinner("app repo", scaffoldAppRepo(WORKSPACE_DIR,acrName,hldUrl));
     await installPromiseSpinner("app lifecycle pipeline", createLifecyclePipeline());
+    await installPromiseSpinner("app build pipeline", createBuildPipeline());
   }
 
   const goToPipelines = await askToSeePipelines(user.firstName);
