@@ -7,6 +7,8 @@
 * Currently we have many entry points and don't do enough to guide users down a path
 * Setting up SPK configuration is difficult
 * Getting the big picture of what SPK offers takes time.
+* People within CSE have trouble with Bedrock
+* The command line is for experts
 
 ## What to accomplish in this prototype
 
@@ -14,6 +16,7 @@
 * Develop a way to help users quickly and interactively build up their configuration  
 * Supercharge our scaffolding by doing what we do in the integration tests
 * Get people further down the line with SPK and Bedrock practices
+* Let people have a glimpse of the benefits and main idea of Bedrock
 
 ## Current Requirements
 
