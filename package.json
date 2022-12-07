@@ -21,7 +21,7 @@
     "inquirer": "^7.0.4",
     "open": "^7.0.2",
     "shelljs": "^0.8.3",
-    "simple-git": "^1.131.0",
+    "simple-git": "^3.15.0",
     "ssh-url": "^0.1.5",
     "ts-node": "^8.6.2"
   },
